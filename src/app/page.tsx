@@ -48,7 +48,7 @@ import {
   MAGENTA,
   WHATSAPP_GROUP_LINK,
 } from '@/lib/vsual-types';
-import { fileToBase64, urlToBase64, compressImage } from '@/lib/vsual-utils';
+import { fileToBase64, urlToBase64, compressImage, generateContactCardImage, base64ToBlob } from '@/lib/vsual-utils';
 import { contactSchema, ContactFormValues } from '@/lib/vsual-validation';
 import { Footer } from '@/components/vsual/footer';
 
@@ -777,7 +777,9 @@ function SuccessScreen({
 }: {
   results: AutomationResults; contact: Contact; brandedSelfie: string | null; cardWatermarked: string | null; cardBase64: string | null; cardUrl: string | null; onReset: () => void;
 }) {
-  const [imageModal, setImageModal] = useState<{ type: 'card' | 'selfie'; open: boolean }>({ type: 'card', open: false });
+  const [imageModal, setImageModal] = useState<{ type: 'card' | 'selfie' | 'contact-card'; open: boolean }>({ type: 'card', open: false });
+  const [contactCardUrl, setContactCardUrl] = useState<string | null>(null);
+  const [isGeneratingCard, setIsGeneratingCard] = useState(false);
 
   const cardPreviewSrc = results.card_drive_url || cardUrl || (cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardBase64 ? `data:image/jpeg;base64,${cardBase64}` : undefined);
   const selfiePreviewSrc = results.selfie_drive_url || (brandedSelfie ? `data:image/jpeg;base64,${brandedSelfie}` : undefined);
@@ -785,6 +787,31 @@ function SuccessScreen({
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text).then(() => toast.success('Link copied!')).catch(() => toast.error('Failed to copy'));
   }, []);
+
+  // Generate the VSUAL contact card image
+  const generateContactCard = useCallback(async (): Promise<Blob | null> => {
+    try {
+      setIsGeneratingCard(true);
+      const blob = await generateContactCardImage({
+        selfieBase64: brandedSelfie,
+        name: contact.name,
+        company: contact.company,
+        title: contact.title,
+        email: contact.email,
+        phone: contact.phone,
+        address: contact.address,
+      });
+      // Also store as data URL for preview
+      const url = URL.createObjectURL(blob);
+      setContactCardUrl(url);
+      return blob;
+    } catch (err) {
+      console.error('Failed to generate contact card:', err);
+      return null;
+    } finally {
+      setIsGeneratingCard(false);
+    }
+  }, [brandedSelfie, contact]);
 
   const buildWhatsAppText = useCallback(() => {
     const lines = [`*📋 New Contact: ${contact.name || 'N/A'}*`];
@@ -801,27 +828,73 @@ function SuccessScreen({
     return lines.join('\n');
   }, [contact, results]);
 
-  const shareToWhatsApp = useCallback(() => {
+  const shareToWhatsApp = useCallback(async () => {
     const text = buildWhatsAppText();
-    if (navigator.share) {
-      navigator.share({ title: `New Contact: ${contact.name}`, text }).catch(() => {
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-      });
-      return;
+
+    // Try Web Share API with contact card image first
+    try {
+      const cardBlob = await generateContactCard();
+      if (cardBlob && navigator.share) {
+        const file = new File([cardBlob], `VSUAL_${contact.name.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file], text })) {
+          await navigator.share({
+            title: `New Contact: ${contact.name}`,
+            text,
+            files: [file],
+          });
+          return;
+        }
+      }
+    } catch (err) {
+      // User cancelled or share failed, fall through
+      if (err instanceof Error && err.name === 'AbortError') return;
     }
+
+    // Fallback: WhatsApp URL API with text
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-  }, [buildWhatsAppText, contact.name]);
+  }, [buildWhatsAppText, contact.name, generateContactCard]);
 
   const openWhatsAppGroup = useCallback(() => { window.open(WHATSAPP_GROUP_LINK, '_blank'); }, []);
 
   const shareGeneral = useCallback(async () => {
     const text = `New Contact Captured: ${contact.name}${contact.company ? ' from ' + contact.company : ''}${contact.email ? ' (' + contact.email + ')' : ''}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: 'VSUAL Contact', text }); return; } catch { /* cancelled */ }
+    try {
+      const cardBlob = await generateContactCard();
+      if (cardBlob && navigator.share) {
+        const file = new File([cardBlob], `VSUAL_${contact.name.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file], text })) {
+          await navigator.share({ title: 'VSUAL Contact', text, files: [file] });
+          return;
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
     }
-    await navigator.clipboard.writeText(text);
-    toast.success('Contact info copied to clipboard!');
-  }, [contact]);
+    // Fallback: copy text
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Contact info copied to clipboard!');
+    } catch {
+      toast.error('Failed to share');
+    }
+  }, [contact, generateContactCard]);
+
+  // Preview the contact card
+  const handlePreviewContactCard = useCallback(async () => {
+    if (!contactCardUrl) {
+      const blob = await generateContactCard();
+      if (!blob) { toast.error('Failed to generate contact card'); return; }
+    }
+    setImageModal({ type: 'contact-card', open: true });
+  }, [contactCardUrl, generateContactCard]);
+
+  // Get the correct image for the modal
+  const modalImageSrc = imageModal.type === 'selfie' ? selfiePreviewSrc
+    : imageModal.type === 'contact-card' ? contactCardUrl
+    : cardPreviewSrc;
+  const modalLabel = imageModal.type === 'selfie' ? 'Branded Selfie'
+    : imageModal.type === 'contact-card' ? 'Contact Card'
+    : 'Business Card';
 
   return (
     <div className="relative flex flex-col items-center justify-center py-8 px-5 sm:px-6 gap-5">
@@ -848,45 +921,160 @@ function SuccessScreen({
         </div>
       </motion.div>
 
-      {/* Captured Images Summary */}
+      {/* Contact Info Card with Image Previews */}
+      <motion.div {...fadeInUp} className="w-full max-w-sm">
+        <GlowCard className="overflow-hidden">
+          {/* Contact Card Preview - tap to expand */}
+          <button
+            onClick={handlePreviewContactCard}
+            className="w-full relative bg-gradient-to-br from-[#1a1a2e] to-[#16213e] overflow-hidden active:scale-[0.98] transition-transform"
+          >
+            {/* Top accent bar */}
+            <div className="h-1 bg-gradient-to-r from-[#C00F7A] via-[#E91E90] to-[#FF6B9D]" />
+            <div className="p-4 flex items-center gap-4">
+              {/* Selfie or V-Logo */}
+              <div className="shrink-0">
+                {selfiePreviewSrc ? (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-[#C00F7A]/60 shadow-[0_2px_12px_rgba(192,15,122,0.3)]">
+                    <img src={selfiePreviewSrc} alt="Selfie" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-[#C00F7A] to-[#E91E90] flex items-center justify-center shadow-[0_2px_12px_rgba(192,15,122,0.3)]">
+                    <span className="text-white font-black text-xl sm:text-2xl">V</span>
+                  </div>
+                )}
+              </div>
+              {/* Contact Info */}
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-white font-bold text-base sm:text-lg truncate">{contact.name || 'Unknown'}</p>
+                {contact.title && <p className="text-[#FF6B9D] text-xs sm:text-sm font-semibold truncate">{contact.title}</p>}
+                {contact.company && <p className="text-white/70 text-xs sm:text-sm truncate">{contact.company}</p>}
+              </div>
+            </div>
+            {/* Contact Details Row */}
+            <div className="px-4 pb-3 space-y-1.5">
+              {contact.email && (
+                <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs">
+                  <Mail className="w-3 h-3 shrink-0 text-[#C00F7A]" />
+                  <span className="truncate">{contact.email}</span>
+                </div>
+              )}
+              {contact.phone && (
+                <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs">
+                  <Phone className="w-3 h-3 shrink-0 text-[#C00F7A]" />
+                  <span className="truncate">{contact.phone}</span>
+                </div>
+              )}
+              {contact.address && (
+                <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs">
+                  <MapPin className="w-3 h-3 shrink-0 text-[#C00F7A]" />
+                  <span className="truncate">{contact.address}</span>
+                </div>
+              )}
+            </div>
+            {/* Bottom bar */}
+            <div className="px-4 py-2 bg-[#C00F7A]/10 flex items-center justify-between">
+              <span className="text-white/30 text-[10px] font-medium">VSUAL Digital Media</span>
+              <span className="text-[#C00F7A] text-[10px] font-bold">⚡ Tap to preview</span>
+            </div>
+          </button>
+        </GlowCard>
+      </motion.div>
+
+      {/* Captured Images - Larger previews */}
       {(selfiePreviewSrc || cardPreviewSrc) && (
-        <motion.div className="flex gap-3 justify-center" {...fadeInUp}>
-          {selfiePreviewSrc && (
-            <button onClick={() => setImageModal({ type: 'selfie', open: true })} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
-              <img src={selfiePreviewSrc} alt="Selfie" className="w-full h-full object-cover" />
-              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1">
-                <p className="text-[9px] text-white font-bold">Selfie</p>
-              </div>
-              {results.selfie_drive_url && <div className="absolute top-1 left-1"><Cloud className="w-3 h-3 text-emerald-400" fill="currentColor" /></div>}
-            </button>
-          )}
-          {cardPreviewSrc && (
-            <button onClick={() => setImageModal({ type: 'card', open: true })} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
-              <img src={cardPreviewSrc} alt="Business Card" className="w-full h-full object-cover" />
-              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1">
-                <p className="text-[9px] text-white font-bold">Card</p>
-              </div>
-              {results.card_drive_url && <div className="absolute top-1 left-1"><Cloud className="w-3 h-3 text-emerald-400" fill="currentColor" /></div>}
-            </button>
-          )}
+        <motion.div className="w-full max-w-sm space-y-3" {...fadeInUp}>
+          <p className="text-xs font-bold text-[#C00F7A] uppercase tracking-widest flex items-center gap-1.5 px-1">
+            <ImageIcon strokeWidth={1.5} className="w-3.5 h-3.5" /> Captured Images
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {selfiePreviewSrc && (
+              <button
+                onClick={() => setImageModal({ type: 'selfie', open: true })}
+                className="relative rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform aspect-[3/4]"
+              >
+                <img src={selfiePreviewSrc} alt="Branded Selfie" className="w-full h-full object-cover" />
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 py-3">
+                  <p className="text-[10px] text-white font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3 text-emerald-400" /> Branded Selfie
+                  </p>
+                </div>
+                {results.selfie_drive_url && <div className="absolute top-2 left-2 bg-black/50 rounded-full p-1"><Cloud className="w-3 h-3 text-emerald-400" fill="currentColor" /></div>}
+              </button>
+            )}
+            {cardPreviewSrc && (
+              <button
+                onClick={() => setImageModal({ type: 'card', open: true })}
+                className="relative rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform aspect-[3/4]"
+              >
+                <img src={cardPreviewSrc} alt="Business Card" className="w-full h-full object-cover" />
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 py-3">
+                  <p className="text-[10px] text-white font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3 text-emerald-400" /> Business Card
+                  </p>
+                </div>
+                {results.card_drive_url && <div className="absolute top-2 left-2 bg-black/50 rounded-full p-1"><Cloud className="w-3 h-3 text-emerald-400" fill="currentColor" /></div>}
+              </button>
+            )}
+          </div>
         </motion.div>
       )}
 
       {/* Image Preview Modal */}
       <AnimatePresence>
-        {imageModal.open && (
+        {imageModal.open && modalImageSrc && (
           <motion.div
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setImageModal({ type: 'card', open: false })}
           >
-            <div className="relative max-w-[90vw] max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => setImageModal({ type: 'card', open: false })} className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center z-10 active:scale-90">
+            <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+              {/* Close button */}
+              <button onClick={() => setImageModal({ type: 'card', open: false })} className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white shadow-md flex items-center justify-center z-10 active:scale-90">
                 <X className="w-4 h-4 text-black" />
               </button>
-              <img src={imageModal.type === 'card' ? cardPreviewSrc : selfiePreviewSrc} alt={imageModal.type === 'card' ? 'Business Card' : 'Selfie'} className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl object-contain" />
+              {/* Image label */}
+              <p className="text-white/70 text-xs font-bold text-center mb-3 uppercase tracking-widest">{modalLabel}</p>
+              {/* Image */}
+              <img src={modalImageSrc} alt={modalLabel} className="w-full max-h-[70vh] rounded-2xl shadow-2xl object-contain mx-auto" />
+              {/* Action buttons below image */}
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      if (imageModal.type === 'contact-card') {
+                        const blob = await generateContactCard();
+                        if (blob && navigator.share) {
+                          const file = new File([blob], `VSUAL_${contact.name.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+                          await navigator.share({ title: 'VSUAL Contact Card', files: [file] });
+                          return;
+                        }
+                      }
+                      // Fallback: download
+                      const a = document.createElement('a');
+                      a.href = modalImageSrc;
+                      a.download = `VSUAL_${imageModal.type}.png`;
+                      a.click();
+                    } catch { /* cancelled */ }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C00F7A] text-white text-xs font-bold active:scale-95 transition-transform shadow-sm"
+                >
+                  <Share2 className="w-3.5 h-3.5" /> Share Image
+                </button>
+                <button
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = modalImageSrc;
+                    a.download = `VSUAL_${imageModal.type}.png`;
+                    a.click();
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 text-white text-xs font-bold active:scale-95 transition-transform"
+                >
+                  <Cloud className="w-3.5 h-3.5" /> Download
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -945,14 +1133,15 @@ function SuccessScreen({
 
       {/* WhatsApp + Share buttons */}
       <div className="w-full max-w-sm space-y-2">
-        <button onClick={shareToWhatsApp} className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold transition-all active:scale-[0.97] shadow-[0_4px_20px_rgba(37,211,102,0.3)]" style={{ backgroundColor: '#25D366', color: 'white' }}>
-          <WhatsAppIcon className="w-5 h-5" /> Share Contact to WhatsApp
+        <button onClick={shareToWhatsApp} disabled={isGeneratingCard} className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold transition-all active:scale-[0.97] shadow-[0_4px_20px_rgba(37,211,102,0.3)] disabled:opacity-70" style={{ backgroundColor: '#25D366', color: 'white' }}>
+          {isGeneratingCard ? <Loader2 className="w-5 h-5 animate-spin" /> : <WhatsAppIcon className="w-5 h-5" />}
+          Share to WhatsApp {selfiePreviewSrc ? 'with Image' : ''}
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button onClick={openWhatsAppGroup} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors">
             <MessageCircle strokeWidth={1.5} className="w-4 h-4" /> Group
           </button>
-          <button onClick={shareGeneral} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors">
+          <button onClick={shareGeneral} disabled={isGeneratingCard} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-70">
             <Share2 strokeWidth={1.5} className="w-4 h-4" /> Share
           </button>
         </div>
