@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String   @default("")
+  company   String   @default("")
+  title     String   @default("")
+  email     String   @default("")
+  phone     String   @default("")
+  address   String   @default("")
+  source    String   @default("VSUAL Networking App")
+
+  // Image data stored as base64 text
+  selfieBase64        String?
+  brandedSelfieBase64 String?
+  businessCardBase64  String?
+
+  // Cloud/storage URLs (local file paths in this deployment)
+  selfieDriveUrl String?
+  cardDriveUrl   String?
+
+  // CRM & automation status
+  ghlContactId    String?  @map("ghlContactId")
+  ghlStatus       String   @default("pending") @map("ghlStatus")
+  driveStatus     String   @default("pending") @map("driveStatus")
+  whatsappStatus  String   @default("skipped") @map("whatsappStatus")
+
+  automationResults String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([phone])
+  @@index([company])
+  @@index([createdAt])
+  @@map("contacts")
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  model     String?
+  provider  String?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("chat_sessions")
+}
