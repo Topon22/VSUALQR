@@ -57,7 +57,7 @@ const fadeInUp = {
   initial: { opacity: 0, y: 24 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -16 },
-  transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
+  transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] },
 };
 
 const staggerContainer = {
@@ -67,7 +67,7 @@ const staggerContainer = {
 const scaleIn = {
   initial: { opacity: 0, scale: 0.9 },
   animate: { opacity: 1, scale: 1 },
-  transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] },
+  transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] },
 };
 
 const pageVariants = {
@@ -78,7 +78,7 @@ const pageVariants = {
 
 const pageTransition = {
   type: 'tween' as const,
-  ease: [0.25, 0.46, 0.45, 0.94],
+  ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number],
   duration: 0.35,
 };
 
@@ -779,8 +779,8 @@ function SuccessScreen({
 }) {
   const [imageModal, setImageModal] = useState<{ type: 'card' | 'selfie'; open: boolean }>({ type: 'card', open: false });
 
-  const cardPreviewSrc = results.card_drive_url || cardUrl || (cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardBase64 ? `data:image/jpeg;base64,${cardBase64}` : null);
-  const selfiePreviewSrc = results.selfie_drive_url || (brandedSelfie ? `data:image/jpeg;base64,${brandedSelfie}` : null);
+  const cardPreviewSrc = results.card_drive_url || cardUrl || (cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardBase64 ? `data:image/jpeg;base64,${cardBase64}` : undefined);
+  const selfiePreviewSrc = results.selfie_drive_url || (brandedSelfie ? `data:image/jpeg;base64,${brandedSelfie}` : undefined);
 
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text).then(() => toast.success('Link copied!')).catch(() => toast.error('Failed to copy'));
