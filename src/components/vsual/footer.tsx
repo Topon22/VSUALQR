@@ -9,12 +9,12 @@
 
 export function Footer() {
   return (
-    <footer className="mt-auto w-full border-t border-gray-100 bg-white/80 backdrop-blur-sm">
+    <footer className="mt-auto w-full border-t border-[#C00F7A]/10 bg-white/90 backdrop-blur-md">
       <div className="flex flex-col items-center py-3 px-4 gap-0.5">
-        <p className="text-[10px] sm:text-[11px] text-[#999999] font-normal uppercase tracking-tight">
+        <p className="text-[10px] sm:text-[11px] text-[#777] font-semibold uppercase tracking-wider">
           VSUALDIGITALMEDIA
         </p>
-        <p className="text-[8px] sm:text-[9px] text-[#BBBBBB] uppercase" style={{ letterSpacing: '3px' }}>
+        <p className="text-[8px] sm:text-[9px] text-[#999] uppercase font-medium" style={{ letterSpacing: '3px' }}>
           Promotional Marketing Agency
         </p>
       </div>

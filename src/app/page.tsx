@@ -478,12 +478,12 @@ function CaptureScreen({
         ) : (
           <motion.button
             onClick={() => cardInputRef.current?.click()}
-            className="group bg-white/70 backdrop-blur-xl border-2 border-dashed border-[#C00F7A]/40 text-gray-800 rounded-2xl py-6 sm:py-8 px-4 flex flex-col items-center justify-center gap-3 hover:border-[#C00F7A] hover:bg-[#C00F7A]/5 transition-all shadow-[0_4px_20px_rgba(192,15,122,0.08)] active:scale-95"
+            className="group bg-white/80 backdrop-blur-xl border-2 border-[#C00F7A]/50 text-gray-800 rounded-2xl py-6 sm:py-8 px-4 flex flex-col items-center justify-center gap-3 hover:border-[#C00F7A] hover:bg-[#C00F7A]/5 transition-all shadow-[0_4px_20px_rgba(192,15,122,0.12)] active:scale-95"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           >
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#C00F7A]/10 flex items-center justify-center group-hover:bg-[#C00F7A]/20 transition-colors">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#C00F7A]/15 flex items-center justify-center group-hover:bg-[#C00F7A]/25 transition-colors">
               <CreditCard strokeWidth={1.5} className="w-6 h-6 sm:w-7 sm:h-7 text-[#C00F7A]" />
             </div>
             <span className="text-xs sm:text-sm font-bold tracking-tight text-[#C00F7A]">Scan Card</span>
