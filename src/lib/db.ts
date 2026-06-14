@@ -17,7 +17,8 @@ function resolveDatabaseUrl(): string {
   const envUrl = process.env.DATABASE_URL ?? '';
 
   // Pool params to avoid connection pool timeouts
-  const poolParams = '&connection_limit=5&pool_timeout=20';
+  // Lower connection_limit + higher pool_timeout for Prisma.io pooled connections
+  const poolParams = '&connection_limit=3&pool_timeout=30';
 
   // Accept both postgres:// and postgresql:// protocols
   if (envUrl.startsWith('postgres://') || envUrl.startsWith('postgresql://')) {
