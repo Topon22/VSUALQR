@@ -486,6 +486,70 @@
   animation: glowPulse 2s ease-in-out infinite;
 }
 
+/* ===== Animated gradient shift ===== */
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animated-gradient-bg {
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+}
+
+/* ===== Pulsing text glow (works with bg-clip-text) ===== */
+@keyframes textGlowPulse {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(192, 15, 122, 0.25)); }
+  50% { filter: drop-shadow(0 0 18px rgba(192, 15, 122, 0.55)) drop-shadow(0 0 36px rgba(233, 30, 144, 0.25)); }
+}
+
+.text-glow-pulse {
+  animation: textGlowPulse 2.5s ease-in-out infinite;
+}
+
+/* ===== Confetti fall ===== */
+@keyframes confettiFall {
+  0% { transform: translateY(-10px) rotate(0deg) scale(1); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(85vh) rotate(720deg) scale(0.4); opacity: 0; }
+}
+
+@keyframes confettiSway {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: 12px; }
+  75% { margin-left: -12px; }
+}
+
+/* ===== Gradient border utility ===== */
+.gradient-border {
+  position: relative;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 16px;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(192, 15, 122, 0.3), rgba(233, 30, 144, 0.15), rgba(192, 15, 122, 0.3));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ===== Smooth step transition ===== */
+@keyframes stepFadeIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.step-transition {
+  animation: stepFadeIn 0.35s ease-out;
+}
+
 /* ===== Responsive Utilities ===== */
 
 /* Ensure proper sizing on large screens */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   CreditCard,
   Camera,
@@ -31,100 +31,26 @@ import {
   Globe,
   Rocket,
   PartyPopper,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
-// ==================== CONSTANTS ====================
-const MAGENTA = '#C00F7A';
-const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/Hn4Ox86GwWz0Wp1oDQ6aA0';
-
-// ==================== TYPES ====================
-interface Contact {
-  name: string;
-  company: string;
-  title: string;
-  email: string;
-  phone: string;
-  address: string;
-}
-
-interface AutomationResults {
-  success: boolean;
-  message: string;
-  ghl_status: 'success' | 'skipped' | 'error' | 'unknown' | 'tracked';
-  drive_status: 'success' | 'skipped' | 'error' | 'unknown';
-  db_status: 'success' | 'skipped' | 'error' | 'unknown';
-  whatsapp_status: 'success' | 'skipped' | 'error' | 'unknown';
-  selfie_drive_url?: string;
-  card_drive_url?: string;
-}
-
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
-type AppStep = 'capture' | 'analyzing' | 'form' | 'automating' | 'success';
-type AppMode = 'networking' | 'chat';
-
-// ==================== UTILITY: fileToBase64 ====================
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      const data = base64.split(',')[1];
-      resolve(data);
-    };
-    reader.onerror = reject;
-  });
-};
-
-// ==================== UTILITY: urlToBase64 ====================
-const urlToBase64 = async (url: string): Promise<string> => {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      resolve(base64.split(',')[1]);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
-
-// ==================== UTILITY: compressImage ====================
-const compressImage = (base64: string, maxSize = 800, quality = 0.8): Promise<string> => {
-  return new Promise((resolve) => {
-    const img = new window.Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let w = img.width;
-      let h = img.height;
-      if (w > maxSize || h > maxSize) {
-        if (w > h) { h = Math.round((h / w) * maxSize); w = maxSize; }
-        else { w = Math.round((w / h) * maxSize); h = maxSize; }
-      }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
-      } else {
-        resolve(base64);
-      }
-    };
-    img.onerror = () => resolve(base64);
-    img.src = `data:image/jpeg;base64,${base64}`;
-  });
-};
+// Shared types, constants, utilities, and validation
+import {
+  Contact,
+  AutomationResults,
+  ChatMessage,
+  AppStep,
+  AppMode,
+  MAGENTA,
+  WHATSAPP_GROUP_LINK,
+} from '@/lib/vsual-types';
+import { fileToBase64, urlToBase64, compressImage } from '@/lib/vsual-utils';
+import { contactSchema, ContactFormValues } from '@/lib/vsual-validation';
+import { Footer } from '@/components/vsual/footer';
 
 // ==================== ANIMATION VARIANTS ====================
 const fadeInUp = {
@@ -144,11 +70,23 @@ const scaleIn = {
   transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] },
 };
 
+const pageVariants = {
+  initial: { opacity: 0, x: 20 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -20 },
+};
+
+const pageTransition = {
+  type: 'tween' as const,
+  ease: [0.25, 0.46, 0.45, 0.94],
+  duration: 0.35,
+};
+
 // ==================== REUSABLE COMPONENTS ====================
 
 function GlassCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white/70 backdrop-blur-2xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] rounded-2xl ${className}`}>
+    <div className={`gradient-border bg-white/70 backdrop-blur-2xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] rounded-2xl ${className}`}>
       {children}
     </div>
   );
@@ -157,8 +95,10 @@ function GlassCard({ children, className = '' }: { children: React.ReactNode; cl
 function GlowCard({ children, className = '', glow = true }: { children: React.ReactNode; className?: string; glow?: boolean }) {
   return (
     <div className={`relative group ${className}`}>
-      {glow && <div className="absolute -inset-0.5 bg-gradient-to-r from-[#C00F7A]/20 via-[#FF6B9D]/10 to-[#C00F7A]/20 rounded-2xl blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500" />}
-      <div className="relative bg-white/80 backdrop-blur-2xl border border-white/60 shadow-[0_4px_24px_rgba(192,15,122,0.06)] rounded-2xl">
+      {glow && (
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-[#C00F7A]/20 via-[#FF6B9D]/10 to-[#C00F7A]/20 rounded-2xl blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      )}
+      <div className="gradient-border relative bg-white/80 backdrop-blur-2xl border border-white/60 shadow-[0_4px_24px_rgba(192,15,122,0.06)] rounded-2xl">
         {children}
       </div>
     </div>
@@ -168,8 +108,13 @@ function GlowCard({ children, className = '', glow = true }: { children: React.R
 function GlassInput({
   label,
   icon: Icon,
+  error,
   ...props
-}: { label?: string; icon?: React.ComponentType<{ strokeWidth?: number; className?: string }> } & React.InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  label?: string;
+  icon?: React.ComponentType<{ strokeWidth?: number; className?: string }>;
+  error?: string;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className="space-y-2">
       {label && (
@@ -179,9 +124,16 @@ function GlassInput({
         </label>
       )}
       <input
-        className="w-full bg-white/60 backdrop-blur-md border border-gray-200/60 rounded-xl px-4 py-3.5 text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C00F7A]/30 focus:border-[#C00F7A]/40 transition-all shadow-sm"
+        className={`w-full bg-white/60 backdrop-blur-md border rounded-xl px-4 py-3.5 text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C00F7A]/30 focus:border-[#C00F7A]/40 transition-all shadow-sm ${
+          error ? 'border-red-400 ring-1 ring-red-200' : 'border-gray-200/60'
+        }`}
         {...props}
       />
+      {error && (
+        <p className="text-xs text-red-500 font-medium mt-1 flex items-center gap-1">
+          <AlertTriangle className="w-3 h-3" /> {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -194,7 +146,7 @@ function PrimaryButton({
 }: { children: React.ReactNode; loading?: boolean; className?: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`relative overflow-hidden bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white rounded-xl py-3.5 px-6 font-semibold tracking-tight hover:from-[#9A0C62] hover:to-[#C00F7A] transition-all shadow-[0_4px_20px_rgba(192,15,122,0.35)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${className}`}
+      className={`relative overflow-hidden bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white rounded-xl py-3.5 px-6 font-semibold tracking-tight hover:from-[#9A0C62] hover:to-[#C00F7A] transition-all shadow-[0_4px_20px_rgba(192,15,122,0.35)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shimmer-btn ${className}`}
       disabled={loading}
       {...props}
     >
@@ -261,10 +213,11 @@ function Header() {
       transition={{ duration: 0.5 }}
     >
       <div className="flex items-center gap-2 mb-1">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C00F7A] to-[#E91E90] flex items-center justify-center shadow-[0_2px_12px_rgba(192,15,122,0.4)]">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C00F7A] via-[#E91E90] to-[#FF6B9D] flex items-center justify-center shadow-[0_2px_12px_rgba(192,15,122,0.4)] animated-gradient-bg">
           <span className="text-white font-black text-lg leading-none">V</span>
         </div>
-        <p className="text-sm font-bold tracking-[0.15em] text-gray-800 uppercase"
+        <p
+          className="text-sm font-bold tracking-[0.15em] text-gray-800 uppercase"
           style={{ fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
         >
           VSUAL
@@ -337,15 +290,39 @@ function SplashScreen({ onComplete }: { onComplete: () => void }) {
   }, [triggerComplete]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); triggerComplete(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); triggerComplete(); }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [triggerComplete]);
 
   return (
-    <div className={`splash-container ${fading ? 'splash-exit' : ''}`} onClick={handleTap} style={{ touchAction: 'manipulation', cursor: 'pointer' }} role="dialog" aria-label="Loading VSUAL">
-      <img src="/red-poster.jpg" alt="" className={`splash-poster ${phase !== 'loading' ? 'splash-poster-hidden' : ''}`} aria-hidden="true" />
-      <video ref={videoRef} className={`splash-video ${phase !== 'loading' ? 'splash-video-visible' : ''}`} src={videoSrc} autoPlay muted playsInline preload="auto" poster="/red-poster.jpg" onTimeUpdate={handleTimeUpdate} onEnded={handleVideoEnd} />
+    <div
+      className={`splash-container ${fading ? 'splash-exit' : ''}`}
+      onClick={handleTap}
+      style={{ touchAction: 'manipulation', cursor: 'pointer' }}
+      role="dialog"
+      aria-label="Loading VSUAL"
+    >
+      <img
+        src="/red-poster.jpg"
+        alt=""
+        className={`splash-poster ${phase !== 'loading' ? 'splash-poster-hidden' : ''}`}
+        aria-hidden="true"
+      />
+      <video
+        ref={videoRef}
+        className={`splash-video ${phase !== 'loading' ? 'splash-video-visible' : ''}`}
+        src={videoSrc}
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
+        poster="/red-poster.jpg"
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleVideoEnd}
+      />
 
       {phase === 'loading' && (
         <div className="splash-loader">
@@ -357,7 +334,9 @@ function SplashScreen({ onComplete }: { onComplete: () => void }) {
       {phase === 'blocked' && (
         <div className="splash-tap-overlay">
           <div className="splash-play-btn">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><polygon points="6,3 20,12 6,21" /></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+              <polygon points="6,3 20,12 6,21" />
+            </svg>
           </div>
           <p className="text-white/90 text-sm font-medium mt-3">Tap to Continue</p>
         </div>
@@ -368,7 +347,9 @@ function SplashScreen({ onComplete }: { onComplete: () => void }) {
           <div className="splash-progress-track">
             <div className="splash-progress-fill" style={{ width: `${videoProgress}%` }} />
           </div>
-          <p className="splash-skip-hint">Skip <span className="splash-skip-hint-sep" aria-hidden="true">·</span> Tap anywhere</p>
+          <p className="splash-skip-hint">
+            Skip <span className="splash-skip-hint-sep" aria-hidden="true">·</span> Tap anywhere
+          </p>
         </div>
       )}
     </div>
@@ -403,17 +384,23 @@ function CaptureScreen({
   }, [urlInput, onCardUrlSubmit]);
 
   useEffect(() => {
-    if (urlLoading) { const t = setTimeout(() => setUrlLoading(false), 3000); return () => clearTimeout(t); }
+    if (urlLoading) {
+      const t = setTimeout(() => setUrlLoading(false), 3000);
+      return () => clearTimeout(t);
+    }
   }, [urlLoading]);
 
   return (
-    <div className="flex flex-col min-h-[80vh] px-5 sm:px-6 gap-5">
+    <div className="flex flex-col px-5 sm:px-6 gap-5">
       <Header />
 
-      {/* Hero Title */}
+      {/* Hero Title with pulsing glow */}
       <motion.div className="text-center px-2" {...fadeInUp}>
         <h1 className="text-3xl sm:text-4xl tracking-tight font-black text-gray-900 mb-2">
-          Instant <span className="bg-gradient-to-r from-[#C00F7A] to-[#E91E90] bg-clip-text text-transparent">Authority</span>
+          Instant{' '}
+          <span className="inline-block bg-gradient-to-r from-[#C00F7A] via-[#E91E90] to-[#FF6B9D] bg-clip-text text-transparent text-glow-pulse">
+            Authority
+          </span>
         </h1>
         <p className="text-sm sm:text-base leading-relaxed text-gray-500 max-w-xs mx-auto">
           Capture your card & selfie, then review & save to your network
@@ -433,11 +420,15 @@ function CaptureScreen({
         ))}
       </motion.div>
 
-      {/* Capture Buttons */}
+      {/* Capture Buttons with hover scale animation */}
       <motion.div className="grid grid-cols-2 gap-3 w-full max-w-md mx-auto" {...scaleIn}>
         {/* Selfie */}
         {hasSelfie ? (
-          <div className="relative rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)]">
+          <motion.div
+            className="relative rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)]"
+            whileHover={{ scale: 1.02 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          >
             <img src={`data:image/jpeg;base64,${brandedSelfie}`} alt="Branded Selfie" className="w-full h-36 sm:h-44 object-cover" />
             <button onClick={onRemoveSelfie} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center active:scale-90 hover:bg-black/80 transition-colors">
               <X className="w-3.5 h-3.5 text-white" />
@@ -447,23 +438,34 @@ function CaptureScreen({
                 <Check className="w-3 h-3" /> Selfie captured
               </p>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <button
+          <motion.button
             onClick={() => selfieInputRef.current?.click()}
             className="group bg-gradient-to-br from-[#C00F7A] to-[#E91E90] text-white rounded-2xl py-6 sm:py-8 px-4 flex flex-col items-center justify-center gap-3 hover:from-[#9A0C62] hover:to-[#C00F7A] transition-all shadow-[0_6px_28px_rgba(192,15,122,0.35)] active:scale-95 border-2 border-[#C00F7A]/50"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           >
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform">
               <Camera strokeWidth={1.5} className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
             </div>
             <span className="text-xs sm:text-sm font-bold tracking-tight">Take Selfie</span>
-          </button>
+          </motion.button>
         )}
 
         {/* Card */}
         {hasCard ? (
-          <div className="relative rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)]">
-            <img src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`} alt="Business Card" className="w-full h-36 sm:h-44 object-cover" />
+          <motion.div
+            className="relative rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)]"
+            whileHover={{ scale: 1.02 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          >
+            <img
+              src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`}
+              alt="Business Card"
+              className="w-full h-36 sm:h-44 object-cover"
+            />
             <button onClick={onRemoveCard} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center active:scale-90 hover:bg-black/80 transition-colors">
               <X className="w-3.5 h-3.5 text-white" />
             </button>
@@ -472,17 +474,20 @@ function CaptureScreen({
                 <Check className="w-3 h-3" /> {cardUrl ? 'Card loaded' : 'Card scanned'}
               </p>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <button
+          <motion.button
             onClick={() => cardInputRef.current?.click()}
             className="group bg-white/70 backdrop-blur-xl border-2 border-dashed border-[#C00F7A]/40 text-gray-800 rounded-2xl py-6 sm:py-8 px-4 flex flex-col items-center justify-center gap-3 hover:border-[#C00F7A] hover:bg-[#C00F7A]/5 transition-all shadow-[0_4px_20px_rgba(192,15,122,0.08)] active:scale-95"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           >
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#C00F7A]/10 flex items-center justify-center group-hover:bg-[#C00F7A]/20 transition-colors">
               <CreditCard strokeWidth={1.5} className="w-6 h-6 sm:w-7 sm:h-7 text-[#C00F7A]" />
             </div>
             <span className="text-xs sm:text-sm font-bold tracking-tight text-[#C00F7A]">Scan Card</span>
-          </button>
+          </motion.button>
         )}
 
         <input ref={selfieInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) onSelfieCapture(file); e.target.value = ''; }} />
@@ -558,7 +563,7 @@ function CaptureScreen({
   );
 }
 
-// ==================== CONTACT FORM ====================
+// ==================== CONTACT FORM (with react-hook-form + zod) ====================
 
 function ContactFormScreen({
   contact, setContact, brandedSelfie, cardWatermarked, cardBase64, cardUrl, onSubmit, onBack, onRescan, onRetakeSelfie, loading,
@@ -567,12 +572,34 @@ function ContactFormScreen({
   brandedSelfie: string | null; cardWatermarked: string | null; cardBase64: string | null; cardUrl: string | null;
   onSubmit: () => void; onBack: () => void; onRescan: () => void; onRetakeSelfie: () => void; loading: boolean;
 }) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ContactFormValues>({
+    resolver: zodResolver(contactSchema),
+    defaultValues: contact,
+  });
+
+  const handleFormSubmit = (data: ContactFormValues) => {
+    // Sync validated data back to parent state
+    setContact({
+      name: data.name ?? '',
+      company: data.company ?? '',
+      title: data.title ?? '',
+      email: data.email ?? '',
+      phone: data.phone ?? '',
+      address: data.address ?? '',
+    });
+    onSubmit();
+  };
+
   return (
-    <div className="px-5 sm:px-6 py-4 space-y-5">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="px-5 sm:px-6 py-4 space-y-5">
       <Header />
 
       <motion.div className="flex items-center gap-3" {...fadeInUp}>
-        <button onClick={onBack} className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-xl border border-[#C00F7A]/20 flex items-center justify-center active:scale-95 transition-transform shadow-sm">
+        <button onClick={onBack} type="button" className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-xl border border-[#C00F7A]/20 flex items-center justify-center active:scale-95 transition-transform shadow-sm">
           <ArrowLeft strokeWidth={1.5} className="w-5 h-5 text-gray-800" />
         </button>
         <div>
@@ -591,12 +618,12 @@ function ContactFormScreen({
                 <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white text-[9px] font-bold shadow-sm">Watermarked</span>
               </div>
             </div>
-            <button onClick={onRetakeSelfie} className="mt-2 w-full flex items-center justify-center gap-1 py-2 text-[11px] font-bold text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95" style={{ touchAction: 'manipulation' }}>
+            <button onClick={onRetakeSelfie} type="button" className="mt-2 w-full flex items-center justify-center gap-1 py-2 text-[11px] font-bold text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95" style={{ touchAction: 'manipulation' }}>
               <Camera className="w-3 h-3" /> Re-take
             </button>
           </GlowCard>
         ) : (
-          <button onClick={onRetakeSelfie} className="rounded-2xl border-2 border-dashed border-gray-200 py-6 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95">
+          <button onClick={onRetakeSelfie} type="button" className="rounded-2xl border-2 border-dashed border-gray-200 py-6 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95">
             <Camera className="w-5 h-5" />
             <span className="text-xs font-bold">Add Selfie</span>
           </button>
@@ -605,38 +632,80 @@ function ContactFormScreen({
         {cardBase64 ? (
           <GlowCard className="p-2">
             <div className="relative rounded-xl overflow-hidden">
-              <img src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`} alt="Business Card" className="w-full h-32 sm:h-40 object-cover" />
+              <img
+                src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`}
+                alt="Business Card"
+                className="w-full h-32 sm:h-40 object-cover"
+              />
               <div className="absolute top-2 right-2">
                 <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white text-[9px] font-bold shadow-sm">Watermarked</span>
               </div>
             </div>
-            <button onClick={onRescan} className="mt-2 w-full flex items-center justify-center gap-1 py-2 text-[11px] font-bold text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95" style={{ touchAction: 'manipulation' }}>
+            <button onClick={onRescan} type="button" className="mt-2 w-full flex items-center justify-center gap-1 py-2 text-[11px] font-bold text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95" style={{ touchAction: 'manipulation' }}>
               <RefreshCw className="w-3 h-3" /> Re-scan
             </button>
           </GlowCard>
         ) : (
-          <button onClick={onRescan} className="rounded-2xl border-2 border-dashed border-gray-200 py-6 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95">
+          <button onClick={onRescan} type="button" className="rounded-2xl border-2 border-dashed border-gray-200 py-6 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95">
             <CreditCard className="w-5 h-5" />
             <span className="text-xs font-bold">Scan Card</span>
           </button>
         )}
       </div>
 
-      {/* Contact Form Fields */}
+      {/* Contact Form Fields with validation */}
       <GlassCard className="p-5 space-y-4">
         <p className="text-xs font-bold text-[#C00F7A] uppercase tracking-widest mb-1 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" /> Contact Details
         </p>
-        <GlassInput label="Name" icon={User} placeholder="John Doe" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
-        <GlassInput label="Company" icon={Building2} placeholder="Acme Corp" value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} />
-        <GlassInput label="Title" icon={Briefcase} placeholder="Sales Director" value={contact.title} onChange={(e) => setContact({ ...contact, title: e.target.value })} />
-        <GlassInput label="Email" icon={Mail} type="email" placeholder="john@acme.com" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
-        <GlassInput label="Phone" icon={Phone} type="tel" placeholder="+1 555 123 4567" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
-        <GlassInput label="Address (Optional)" icon={MapPin} placeholder="123 Main St, City, State" value={contact.address} onChange={(e) => setContact({ ...contact, address: e.target.value })} />
+        <GlassInput
+          label="Name"
+          icon={User}
+          placeholder="John Doe"
+          error={errors.name?.message}
+          {...register('name')}
+        />
+        <GlassInput
+          label="Company"
+          icon={Building2}
+          placeholder="Acme Corp"
+          error={errors.company?.message}
+          {...register('company')}
+        />
+        <GlassInput
+          label="Title"
+          icon={Briefcase}
+          placeholder="Sales Director"
+          error={errors.title?.message}
+          {...register('title')}
+        />
+        <GlassInput
+          label="Email"
+          icon={Mail}
+          type="email"
+          placeholder="john@acme.com"
+          error={errors.email?.message}
+          {...register('email')}
+        />
+        <GlassInput
+          label="Phone"
+          icon={Phone}
+          type="tel"
+          placeholder="+1 555 123 4567"
+          error={errors.phone?.message}
+          {...register('phone')}
+        />
+        <GlassInput
+          label="Address (Optional)"
+          icon={MapPin}
+          placeholder="123 Main St, City, State"
+          error={errors.address?.message}
+          {...register('address')}
+        />
       </GlassCard>
 
       <div className="space-y-3 pb-8">
-        <PrimaryButton onClick={onSubmit} loading={loading} className="w-full text-base">
+        <PrimaryButton type="submit" loading={loading} className="w-full text-base">
           <Rocket strokeWidth={2} className="w-5 h-5" />
           Confirm & Save
         </PrimaryButton>
@@ -647,17 +716,57 @@ function ContactFormScreen({
           <span className="flex items-center gap-1.5"><MessageCircle strokeWidth={1.5} className="w-3.5 h-3.5" /> WhatsApp</span>
         </div>
       </div>
-    </div>
+    </form>
   );
 }
 
 // ==================== WHATSAPP ICON ====================
 
-function WhatsAppIcon({ className = "w-4 h-4" }: { className?: string }) {
+function WhatsAppIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
     </svg>
+  );
+}
+
+// ==================== CONFETTI PARTICLES ====================
+
+function Confetti() {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 35 }, (_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        delay: Math.random() * 1.5,
+        duration: 2.5 + Math.random() * 2,
+        size: 5 + Math.random() * 7,
+        color: ['#C00F7A', '#E91E90', '#FF6B9D', '#10B981', '#F59E0B', '#6366F1'][Math.floor(Math.random() * 6)],
+        swayDuration: 1.5 + Math.random() * 1.5,
+        shape: Math.random() > 0.5 ? 'circle' : 'rect',
+      })),
+    [],
+  );
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="absolute"
+          style={{
+            left: `${p.x}%`,
+            top: -10,
+            width: p.size,
+            height: p.shape === 'rect' ? p.size * 0.6 : p.size,
+            borderRadius: p.shape === 'circle' ? '50%' : '2px',
+            backgroundColor: p.color,
+            animation: `confettiFall ${p.duration}s ease-in ${p.delay}s forwards, confettiSway ${p.swayDuration}s ease-in-out ${p.delay}s infinite`,
+            opacity: 0,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -668,7 +777,7 @@ function SuccessScreen({
 }: {
   results: AutomationResults; contact: Contact; brandedSelfie: string | null; cardWatermarked: string | null; cardBase64: string | null; cardUrl: string | null; onReset: () => void;
 }) {
-  const [imageModal, setImageModal] = useState<{type: 'card' | 'selfie'; open: boolean}>({type: 'card', open: false});
+  const [imageModal, setImageModal] = useState<{ type: 'card' | 'selfie'; open: boolean }>({ type: 'card', open: false });
 
   const cardPreviewSrc = results.card_drive_url || cardUrl || (cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardBase64 ? `data:image/jpeg;base64,${cardBase64}` : null);
   const selfiePreviewSrc = results.selfie_drive_url || (brandedSelfie ? `data:image/jpeg;base64,${brandedSelfie}` : null);
@@ -707,17 +816,27 @@ function SuccessScreen({
 
   const shareGeneral = useCallback(async () => {
     const text = `New Contact Captured: ${contact.name}${contact.company ? ' from ' + contact.company : ''}${contact.email ? ' (' + contact.email + ')' : ''}`;
-    if (navigator.share) { try { await navigator.share({ title: 'VSUAL Contact', text }); return; } catch {} }
+    if (navigator.share) {
+      try { await navigator.share({ title: 'VSUAL Contact', text }); return; } catch { /* cancelled */ }
+    }
     await navigator.clipboard.writeText(text);
     toast.success('Contact info copied to clipboard!');
   }, [contact]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5 sm:px-6 gap-5">
+    <div className="relative flex flex-col items-center justify-center py-8 px-5 sm:px-6 gap-5">
+      {/* Confetti particles */}
+      <Confetti />
+
       <Header />
 
       {/* Success Celebration */}
-      <motion.div className="flex flex-col items-center gap-4" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 15 }}>
+      <motion.div
+        className="flex flex-col items-center gap-4 relative z-20"
+        initial={{ scale: 0.5, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+      >
         <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_8px_32px_rgba(16,185,129,0.4)]">
           <PartyPopper strokeWidth={1.5} className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
         </div>
@@ -733,7 +852,7 @@ function SuccessScreen({
       {(selfiePreviewSrc || cardPreviewSrc) && (
         <motion.div className="flex gap-3 justify-center" {...fadeInUp}>
           {selfiePreviewSrc && (
-            <button onClick={() => setImageModal({type: 'selfie', open: true})} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
+            <button onClick={() => setImageModal({ type: 'selfie', open: true })} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
               <img src={selfiePreviewSrc} alt="Selfie" className="w-full h-full object-cover" />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1">
                 <p className="text-[9px] text-white font-bold">Selfie</p>
@@ -742,7 +861,7 @@ function SuccessScreen({
             </button>
           )}
           {cardPreviewSrc && (
-            <button onClick={() => setImageModal({type: 'card', open: true})} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
+            <button onClick={() => setImageModal({ type: 'card', open: true })} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
               <img src={cardPreviewSrc} alt="Business Card" className="w-full h-full object-cover" />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1">
                 <p className="text-[9px] text-white font-bold">Card</p>
@@ -754,16 +873,24 @@ function SuccessScreen({
       )}
 
       {/* Image Preview Modal */}
-      {imageModal.open && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setImageModal({type: 'card', open: false})}>
-          <div className="relative max-w-[90vw] max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setImageModal({type: 'card', open: false})} className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center z-10 active:scale-90">
-              <X className="w-4 h-4 text-black" />
-            </button>
-            <img src={imageModal.type === 'card' ? cardPreviewSrc : selfiePreviewSrc} alt={imageModal.type === 'card' ? 'Business Card' : 'Selfie'} className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl object-contain" />
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {imageModal.open && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setImageModal({ type: 'card', open: false })}
+          >
+            <div className="relative max-w-[90vw] max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setImageModal({ type: 'card', open: false })} className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center z-10 active:scale-90">
+                <X className="w-4 h-4 text-black" />
+              </button>
+              <img src={imageModal.type === 'card' ? cardPreviewSrc : selfiePreviewSrc} alt={imageModal.type === 'card' ? 'Business Card' : 'Selfie'} className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl object-contain" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Automation Status */}
       <motion.div {...fadeInUp}>
@@ -777,10 +904,16 @@ function SuccessScreen({
             { icon: <Building2 strokeWidth={1.5} className="w-4 h-4" />, label: 'GoHighLevel', status: results.ghl_status },
             { icon: <WhatsAppIcon />, label: 'WhatsApp Group', status: results.whatsapp_status },
           ].map((item, i) => (
-            <div key={i} className="flex items-center justify-between py-1">
+            <motion.div
+              key={i}
+              className="flex items-center justify-between py-1"
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.1 }}
+            >
               <span className="text-sm text-gray-500 flex items-center gap-2 font-medium">{item.icon} {item.label}</span>
               <StatusBadge status={item.status} />
-            </div>
+            </motion.div>
           ))}
         </GlassCard>
       </motion.div>
@@ -832,14 +965,6 @@ function SuccessScreen({
   );
 }
 
-// ==================== HELPER: base64ToBlob ====================
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  const binaryStr = atob(base64);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-  return new Blob([bytes], { type: mimeType });
-}
-
 // ==================== AGENT CHAT ====================
 
 function AgentChat() {
@@ -853,6 +978,7 @@ function AgentChat() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef(`session-${Date.now()}`);
 
@@ -863,6 +989,7 @@ function AgentChat() {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
 
+    setChatError(null);
     const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: trimmed, timestamp: new Date() };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
@@ -878,13 +1005,23 @@ function AgentChat() {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Chat service returned ${response.status}`);
+      }
+
       const data = await response.json();
-      if (data.error) { toast.error(data.error); return; }
+      if (data.error) {
+        setChatError(data.error);
+        toast.error(data.error);
+        return;
+      }
 
       const assistantMsg: ChatMessage = { id: `assistant-${Date.now()}`, role: 'assistant', content: data.message, timestamp: new Date() };
       setMessages((prev) => [...prev, assistantMsg]);
-    } catch {
-      toast.error('Failed to get a response. Please try again.');
+    } catch (err) {
+      const errorMsg = 'Failed to get a response. Please try again.';
+      setChatError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -896,10 +1033,34 @@ function AgentChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] sm:h-[calc(100vh-140px)]">
-      {/* Messages Area */}
+      {/* Error banner */}
+      <AnimatePresence>
+        {chatError && (
+          <motion.div
+            className="mx-4 mb-2 p-3 rounded-xl bg-red-50 border border-red-200 flex items-center gap-2 text-xs text-red-600 font-medium"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            {chatError}
+            <button onClick={() => setChatError(null)} className="ml-auto shrink-0">
+              <X className="w-3 h-3" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Messages Area with slide-in animations */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 vsual-scrollbar">
-        {messages.map((msg) => (
-          <motion.div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        {messages.map((msg, i) => (
+          <motion.div
+            key={msg.id}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            initial={{ opacity: 0, x: msg.role === 'user' ? 16 : -16, y: 4 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            transition={{ duration: 0.3, delay: i === 0 ? 0 : 0.05 }}
+          >
             <div className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-2xl text-[14px] sm:text-[15px] leading-relaxed ${
               msg.role === 'user'
                 ? 'bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white rounded-br-md shadow-[0_2px_12px_rgba(192,15,122,0.3)]'
@@ -937,31 +1098,57 @@ function AgentChat() {
   );
 }
 
-// ==================== MODE TOGGLE ====================
+// ==================== MODE TOGGLE (with animated indicator) ====================
 
 function ModeToggle({ mode, onModeChange }: { mode: AppMode; onModeChange: (mode: AppMode) => void }) {
   return (
-    <div className="mx-4 mt-4 p-1 flex items-center gap-1 bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-sm">
+    <div className="mx-4 mt-4 p-1 flex items-center bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-sm relative">
+      {/* Animated background pill */}
+      <motion.div
+        className="absolute top-1 bottom-1 rounded-xl bg-gradient-to-r from-[#C00F7A] to-[#E91E90] shadow-[0_2px_12px_rgba(192,15,122,0.35)]"
+        layoutId="modeBg"
+        transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+        style={{
+          left: mode === 'networking' ? 4 : '50%',
+          right: mode === 'chat' ? 4 : '50%',
+          width: 'calc(50% - 4px)',
+        }}
+      />
       <button
         onClick={() => onModeChange('networking')}
-        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-all ${
-          mode === 'networking'
-            ? 'bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white shadow-[0_2px_12px_rgba(192,15,122,0.35)]'
-            : 'text-gray-400 hover:text-gray-700'
+        className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-colors duration-300 ${
+          mode === 'networking' ? 'text-white' : 'text-gray-400 hover:text-gray-700'
         }`}
       >
         <HomeIcon strokeWidth={1.5} className="w-4 h-4" /> Capture
       </button>
       <button
         onClick={() => onModeChange('chat')}
-        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-all ${
-          mode === 'chat'
-            ? 'bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white shadow-[0_2px_12px_rgba(192,15,122,0.35)]'
-            : 'text-gray-400 hover:text-gray-700'
+        className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-colors duration-300 ${
+          mode === 'chat' ? 'text-white' : 'text-gray-400 hover:text-gray-700'
         }`}
       >
         <MessageCircle strokeWidth={1.5} className="w-4 h-4" /> Agent Chat
       </button>
+    </div>
+  );
+}
+
+// ==================== ERROR BOUNDARY FALLBACK ====================
+
+function ErrorFallback({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 px-8 gap-5">
+      <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+        <AlertTriangle className="w-8 h-8 text-red-500" />
+      </div>
+      <div className="text-center">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+        <p className="text-sm text-gray-500">{error}</p>
+      </div>
+      <PrimaryButton onClick={onRetry}>
+        <RefreshCw strokeWidth={2} className="w-4 h-4" /> Try Again
+      </PrimaryButton>
     </div>
   );
 }
@@ -980,11 +1167,13 @@ export default function Home() {
   const [automationResults, setAutomationResults] = useState<AutomationResults | null>(null);
   const [analyzeText, setAnalyzeText] = useState('Analyzing...');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fatalError, setFatalError] = useState<string | null>(null);
 
   const handleSplashComplete = useCallback(() => setShowSplash(false), []);
 
   const handleSelfieCapture = useCallback(async (file: File) => {
     try {
+      setFatalError(null);
       setStep('analyzing');
       setAnalyzeText('Branding your selfie...');
       const rawBase64 = await fileToBase64(file);
@@ -996,11 +1185,15 @@ export default function Home() {
       } catch { setBrandedSelfie(compressed); }
       toast.success('Selfie captured with VSUAL watermark!');
       setStep('capture');
-    } catch { toast.error('Failed to process selfie. Please try again.'); setStep('capture'); }
+    } catch {
+      toast.error('Failed to process selfie. Please try again.');
+      setStep('capture');
+    }
   }, []);
 
   const handleCardCapture = useCallback(async (file: File) => {
     try {
+      setFatalError(null);
       setStep('analyzing');
       setAnalyzeText('Scanning business card...');
       const rawBase64 = await fileToBase64(file);
@@ -1024,7 +1217,10 @@ export default function Home() {
             toast.success(`${ocrProvider}: ${fieldCount} field${fieldCount > 1 ? 's' : ''} extracted`);
           } else { toast.info('Card scanned. Fill in details manually.'); }
         } else { toast.info('Card captured. Fill in details manually.'); }
-      } catch (ocrErr) { console.error('OCR failed:', ocrErr); toast.info('Card captured. Fill in details manually.'); }
+      } catch (ocrErr) {
+        console.error('OCR failed:', ocrErr);
+        toast.info('Card captured. Fill in details manually.');
+      }
       try {
         setAnalyzeText('Applying watermark...');
         const wmResponse = await fetch('/api/watermark-selfie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: compressed }) });
@@ -1033,18 +1229,36 @@ export default function Home() {
       } catch { /* Watermark failed - not critical */ }
       toast.success('Business card scanned!');
       setStep('capture');
-    } catch { toast.error('Failed to process card image. Please try again.'); setStep('capture'); }
+    } catch {
+      toast.error('Failed to process card image. Please try again.');
+      setStep('capture');
+    }
   }, []);
 
   const handleRemoveSelfie = useCallback(() => { setBrandedSelfie(null); toast.info('Selfie removed. Take a new one.'); }, []);
-  const handleRemoveCard = useCallback(() => { setCardBase64(null); setCardWatermarked(null); setCardUrl(null); setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' }); toast.info('Card removed. Scan a new one.'); }, []);
+  const handleRemoveCard = useCallback(() => {
+    setCardBase64(null); setCardWatermarked(null); setCardUrl(null);
+    setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' });
+    toast.info('Card removed. Scan a new one.');
+  }, []);
 
   const handleCardUrlSubmit = useCallback(async (url: string) => {
     try {
+      setFatalError(null);
       setStep('analyzing');
       setAnalyzeText('Loading card from URL...');
       setCardUrl(url);
-      const rawBase64 = await urlToBase64(url);
+
+      let rawBase64: string;
+      try {
+        rawBase64 = await urlToBase64(url);
+      } catch (fetchErr) {
+        toast.error('Could not load image from URL. It may be blocked by CORS or the link may be invalid.');
+        setCardUrl(null);
+        setStep('capture');
+        return;
+      }
+
       const compressed = await compressImage(rawBase64, 800, 0.85);
       setCardBase64(compressed);
       try {
@@ -1075,7 +1289,11 @@ export default function Home() {
       } catch { /* Watermark failed */ }
       toast.success('Business card loaded from URL!');
       setStep('capture');
-    } catch { toast.error('Failed to load image from URL. Check the link and try again.'); setCardUrl(null); setStep('capture'); }
+    } catch {
+      toast.error('Failed to load image from URL. Check the link and try again.');
+      setCardUrl(null);
+      setStep('capture');
+    }
   }, []);
 
   const handleContinueToForm = useCallback(() => setStep('form'), []);
@@ -1084,14 +1302,30 @@ export default function Home() {
     setStep('automating');
     setIsSubmitting(true);
     try {
+      setFatalError(null);
       const saveResponse = await fetch('/api/save-contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: contact.name, company: contact.company, title: contact.title, email: contact.email, phone: contact.phone, address: contact.address, selfie_base64: brandedSelfie || undefined, card_base64: cardWatermarked || cardBase64 || undefined, source: 'VSUAL Networking App' }),
+        body: JSON.stringify({
+          name: contact.name, company: contact.company, title: contact.title, email: contact.email, phone: contact.phone, address: contact.address,
+          selfie_base64: brandedSelfie || undefined,
+          card_base64: cardWatermarked || cardBase64 || undefined,
+          source: 'VSUAL Networking App',
+        }),
       });
+
+      if (!saveResponse.ok) {
+        throw new Error(`Save failed with status ${saveResponse.status}`);
+      }
+
       const data = await saveResponse.json();
       if (data.error) { toast.error(data.error); setStep('form'); setIsSubmitting(false); return; }
-      const results: AutomationResults = { success: data.success, message: data.message, ghl_status: data.ghl_status || 'unknown', drive_status: data.drive_status || 'unknown', db_status: data.db_status || 'unknown', whatsapp_status: data.whatsapp_status || 'unknown', selfie_drive_url: data.selfie_drive_url, card_drive_url: data.card_drive_url };
+      const results: AutomationResults = {
+        success: data.success, message: data.message,
+        ghl_status: data.ghl_status || 'unknown', drive_status: data.drive_status || 'unknown',
+        db_status: data.db_status || 'unknown', whatsapp_status: data.whatsapp_status || 'unknown',
+        selfie_drive_url: data.selfie_drive_url, card_drive_url: data.card_drive_url,
+      };
       if (results.db_status === 'success') toast.success('Saved to database!');
       if (results.ghl_status === 'success') toast.success('Added to GoHighLevel!');
       if (results.ghl_status === 'tracked') toast.info('GHL: Contact tracked via pixel.');
@@ -1099,16 +1333,28 @@ export default function Home() {
       if (results.ghl_status === 'error') toast.error('GHL: ' + (data.ghl_message || 'API error.'));
       setAutomationResults(results);
       setStep('success');
-    } catch { toast.error('Save failed. Please try again.'); setStep('form'); } finally { setIsSubmitting(false); }
+    } catch (err) {
+      toast.error('Save failed. Please try again.');
+      setFatalError('Failed to save contact. Check your connection and try again.');
+      setStep('form');
+    } finally { setIsSubmitting(false); }
   }, [contact, brandedSelfie, cardWatermarked, cardBase64]);
 
-  const handleReset = useCallback(() => { setStep('capture'); setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' }); setBrandedSelfie(null); setCardBase64(null); setCardWatermarked(null); setCardUrl(null); setAutomationResults(null); }, []);
+  const handleReset = useCallback(() => {
+    setStep('capture');
+    setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' });
+    setBrandedSelfie(null); setCardBase64(null); setCardWatermarked(null);
+    setCardUrl(null); setAutomationResults(null); setFatalError(null);
+  }, []);
   const handleRescan = useCallback(() => { setCardBase64(null); setCardWatermarked(null); setCardUrl(null); setStep('capture'); }, []);
   const handleRetakeSelfie = useCallback(() => { setBrandedSelfie(null); setStep('capture'); }, []);
   const handleModeChange = useCallback((newMode: AppMode) => setMode(newMode), []);
 
   return (
-    <div className="w-full max-w-[428px] lg:max-w-[480px] mx-auto min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #FBFBFD 0%, #F5F0F5 40%, #FBFBFD 100%)' }}>
+    <div
+      className="w-full max-w-[428px] lg:max-w-[480px] mx-auto min-h-screen flex flex-col relative overflow-hidden"
+      style={{ background: 'linear-gradient(180deg, #FBFBFD 0%, #F5F0F5 40%, #FBFBFD 100%)' }}
+    >
       {/* Decorative gradient orbs */}
       <div className="fixed top-0 right-0 w-64 h-64 bg-[#C00F7A]/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-20 left-0 w-48 h-48 bg-[#E91E90]/5 rounded-full blur-[80px] pointer-events-none" />
@@ -1118,55 +1364,100 @@ export default function Home() {
 
       {/* Main Content */}
       {!showSplash && (
-        <AnimatePresence mode="wait">
-          <div className="flex flex-col min-h-screen">
-            <ModeToggle mode={mode} onModeChange={handleModeChange} />
+        <>
+          <ModeToggle mode={mode} onModeChange={handleModeChange} />
 
+          {/* Fatal Error Banner */}
+          <AnimatePresence>
+            {fatalError && (
+              <motion.div
+                className="mx-4 mt-3 p-3 rounded-xl bg-red-50 border border-red-200 flex items-center gap-2 text-xs text-red-600 font-medium"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {fatalError}
+                <button onClick={() => setFatalError(null)} className="ml-auto shrink-0">
+                  <X className="w-3 h-3" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Main area with flex-1 to push footer down */}
+          <div className="flex-1 flex flex-col">
             {mode === 'networking' && (
               <main className="flex-1">
-                {step === 'capture' && (
-                  <CaptureScreen brandedSelfie={brandedSelfie} cardBase64={cardBase64} cardWatermarked={cardWatermarked} cardUrl={cardUrl} contact={contact} onCardCapture={handleCardCapture} onSelfieCapture={handleSelfieCapture} onRemoveSelfie={handleRemoveSelfie} onRemoveCard={handleRemoveCard} onCardUrlSubmit={handleCardUrlSubmit} onContinue={handleContinueToForm} />
-                )}
-                {step === 'analyzing' && (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5">
-                    <Header />
-                    {cardBase64 && !cardWatermarked && (
-                      <div className="mb-4 w-full max-w-[200px]">
-                        <GlassCard className="p-2 rounded-xl overflow-hidden">
-                          <img src={cardUrl || `data:image/jpeg;base64,${cardBase64}`} alt="Scanning card" className="w-full h-auto rounded-lg opacity-80" />
-                        </GlassCard>
-                        <p className="text-[11px] text-gray-400 text-center mt-2 font-medium">{cardUrl ? 'Loading card...' : 'Scanning this card...'}</p>
-                      </div>
-                    )}
-                    {!cardBase64 && (
-                      <div className="mb-4 w-full max-w-[200px]">
-                        <GlassCard className="p-2 rounded-xl overflow-hidden flex items-center justify-center h-28">
-                          <Camera className="w-8 h-8 text-[#C00F7A] animate-pulse" />
-                        </GlassCard>
-                        <p className="text-[11px] text-gray-400 text-center mt-2 font-medium">Processing selfie...</p>
-                      </div>
-                    )}
-                    <AppleSpinner text={analyzeText} />
-                  </div>
-                )}
-                {step === 'form' && (
-                  <ContactFormScreen contact={contact} setContact={setContact} brandedSelfie={brandedSelfie} cardWatermarked={cardWatermarked} cardBase64={cardBase64} cardUrl={cardUrl} onSubmit={handleTriggerAutomation} onBack={handleReset} onRescan={handleRescan} onRetakeSelfie={handleRetakeSelfie} loading={isSubmitting} />
-                )}
-                {step === 'automating' && (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5">
-                    <Header />
-                    <AppleSpinner text="Triggering automations..." />
-                  </div>
-                )}
-                {step === 'success' && automationResults && (
-                  <SuccessScreen results={automationResults} contact={contact} brandedSelfie={brandedSelfie} cardWatermarked={cardWatermarked} cardBase64={cardBase64} cardUrl={cardUrl} onReset={handleReset} />
-                )}
+                <AnimatePresence mode="wait">
+                  {step === 'capture' && (
+                    <motion.div key="capture" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+                      <CaptureScreen
+                        brandedSelfie={brandedSelfie} cardBase64={cardBase64} cardWatermarked={cardWatermarked}
+                        cardUrl={cardUrl} contact={contact} onCardCapture={handleCardCapture}
+                        onSelfieCapture={handleSelfieCapture} onRemoveSelfie={handleRemoveSelfie}
+                        onRemoveCard={handleRemoveCard} onCardUrlSubmit={handleCardUrlSubmit} onContinue={handleContinueToForm}
+                      />
+                    </motion.div>
+                  )}
+                  {step === 'analyzing' && (
+                    <motion.div key="analyzing" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition} className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5">
+                      <Header />
+                      {cardBase64 && !cardWatermarked && (
+                        <div className="mb-4 w-full max-w-[200px]">
+                          <GlassCard className="p-2 rounded-xl overflow-hidden">
+                            <img src={cardUrl || `data:image/jpeg;base64,${cardBase64}`} alt="Scanning card" className="w-full h-auto rounded-lg opacity-80" />
+                          </GlassCard>
+                          <p className="text-[11px] text-gray-400 text-center mt-2 font-medium">{cardUrl ? 'Loading card...' : 'Scanning this card...'}</p>
+                        </div>
+                      )}
+                      {!cardBase64 && (
+                        <div className="mb-4 w-full max-w-[200px]">
+                          <GlassCard className="p-2 rounded-xl overflow-hidden flex items-center justify-center h-28">
+                            <Camera className="w-8 h-8 text-[#C00F7A] animate-pulse" />
+                          </GlassCard>
+                          <p className="text-[11px] text-gray-400 text-center mt-2 font-medium">Processing selfie...</p>
+                        </div>
+                      )}
+                      <AppleSpinner text={analyzeText} />
+                    </motion.div>
+                  )}
+                  {step === 'form' && (
+                    <motion.div key="form" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+                      <ContactFormScreen
+                        contact={contact} setContact={setContact} brandedSelfie={brandedSelfie}
+                        cardWatermarked={cardWatermarked} cardBase64={cardBase64} cardUrl={cardUrl}
+                        onSubmit={handleTriggerAutomation} onBack={handleReset}
+                        onRescan={handleRescan} onRetakeSelfie={handleRetakeSelfie} loading={isSubmitting}
+                      />
+                    </motion.div>
+                  )}
+                  {step === 'automating' && (
+                    <motion.div key="automating" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition} className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5">
+                      <Header />
+                      <AppleSpinner text="Triggering automations..." />
+                    </motion.div>
+                  )}
+                  {step === 'success' && automationResults && (
+                    <motion.div key="success" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={pageTransition}>
+                      <SuccessScreen
+                        results={automationResults} contact={contact} brandedSelfie={brandedSelfie}
+                        cardWatermarked={cardWatermarked} cardBase64={cardBase64} cardUrl={cardUrl} onReset={handleReset}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </main>
             )}
 
             {mode === 'chat' && (
               <main className="flex-1 pt-2">
-                <div className="flex items-center gap-3 px-5 pb-3">
+                <motion.div
+                  className="flex items-center gap-3 px-5 pb-3"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
                   <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#C00F7A] to-[#E91E90] flex items-center justify-center shadow-[0_2px_12px_rgba(192,15,122,0.3)]">
                     <Zap strokeWidth={1.5} className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
@@ -1176,12 +1467,15 @@ export default function Home() {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Powered by Z AI
                     </p>
                   </div>
-                </div>
+                </motion.div>
                 <AgentChat />
               </main>
             )}
           </div>
-        </AnimatePresence>
+
+          {/* Sticky Footer */}
+          <Footer />
+        </>
       )}
     </div>
   );
