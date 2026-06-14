@@ -1,0 +1,1762 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useCallback, useEffect } from 'react';
+     4→import {
+     5→  CreditCard,
+     6→  Camera,
+     7→  Loader2,
+     8→  User,
+     9→  Building2,
+    10→  Briefcase,
+    11→  Mail,
+    12→  Phone,
+    13→  MapPin,
+    14→  Send,
+    15→  Check,
+    16→  ArrowLeft,
+    17→  ArrowRight,
+    18→  RefreshCw,
+    19→  Home as HomeIcon,
+    20→  MessageCircle,
+    21→  Zap,
+    22→  Database,
+    23→  Share2,
+    24→  X,
+    25→  Link,
+    26→  Cloud,
+    27→  ExternalLink,
+    28→  ImageIcon,
+    29→} from 'lucide-react';
+    30→import { toast } from 'sonner';
+    31→
+    32→// ==================== CONSTANTS ====================
+    33→const MAGENTA = '#C00F7A';
+    34→const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/Hn4Ox86GwWz0Wp1oDQ6aA0';
+    35→
+    36→// ==================== TYPES ====================
+    37→interface Contact {
+    38→  name: string;
+    39→  company: string;
+    40→  title: string;
+    41→  email: string;
+    42→  phone: string;
+    43→  address: string;
+    44→}
+    45→
+    46→interface AutomationResults {
+    47→  success: boolean;
+    48→  message: string;
+    49→  ghl_status: 'success' | 'skipped' | 'error' | 'unknown' | 'tracked';
+    50→  drive_status: 'success' | 'skipped' | 'error' | 'unknown';
+    51→  db_status: 'success' | 'skipped' | 'error' | 'unknown';
+    52→  whatsapp_status: 'success' | 'skipped' | 'error' | 'unknown';
+    53→  selfie_drive_url?: string;
+    54→  card_drive_url?: string;
+    55→}
+    56→
+    57→interface ChatMessage {
+    58→  id: string;
+    59→  role: 'user' | 'assistant';
+    60→  content: string;
+    61→  timestamp: Date;
+    62→}
+    63→
+    64→type AppStep = 'capture' | 'analyzing' | 'form' | 'automating' | 'success';
+    65→type AppMode = 'networking' | 'chat';
+    66→
+    67→// ==================== UTILITY: fileToBase64 ====================
+    68→const fileToBase64 = (file: File): Promise<string> => {
+    69→  return new Promise((resolve, reject) => {
+    70→    const reader = new FileReader();
+    71→    reader.readAsDataURL(file);
+    72→    reader.onload = () => {
+    73→      const base64 = reader.result as string;
+    74→      const data = base64.split(',')[1];
+    75→      resolve(data);
+    76→    };
+    77→    reader.onerror = reject;
+    78→  });
+    79→};
+    80→
+    81→// ==================== UTILITY: urlToBase64 ====================
+    82→const urlToBase64 = async (url: string): Promise<string> => {
+    83→  const response = await fetch(url);
+    84→  const blob = await response.blob();
+    85→  return new Promise((resolve, reject) => {
+    86→    const reader = new FileReader();
+    87→    reader.onloadend = () => {
+    88→      const base64 = reader.result as string;
+    89→      resolve(base64.split(',')[1]);
+    90→    };
+    91→    reader.onerror = reject;
+    92→    reader.readAsDataURL(blob);
+    93→  });
+    94→};
+    95→
+    96→// ==================== UTILITY: compressImage ====================
+    97→const compressImage = (base64: string, maxSize = 800, quality = 0.8): Promise<string> => {
+    98→  return new Promise((resolve) => {
+    99→    const img = new window.Image();
+   100→    img.onload = () => {
+   101→      const canvas = document.createElement('canvas');
+   102→      let w = img.width;
+   103→      let h = img.height;
+   104→      if (w > maxSize || h > maxSize) {
+   105→        if (w > h) { h = Math.round((h / w) * maxSize); w = maxSize; }
+   106→        else { w = Math.round((w / h) * maxSize); h = maxSize; }
+   107→      }
+   108→      canvas.width = w;
+   109→      canvas.height = h;
+   110→      const ctx = canvas.getContext('2d');
+   111→      if (ctx) {
+   112→        ctx.drawImage(img, 0, 0, w, h);
+   113→        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+   114→      } else {
+   115→        resolve(base64);
+   116→      }
+   117→    };
+   118→    img.onerror = () => resolve(base64);
+   119→    img.src = `data:image/jpeg;base64,${base64}`;
+   120→  });
+   121→};
+   122→
+   123→// ==================== REUSABLE COMPONENTS ====================
+   124→
+   125→function GlassCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+   126→  return (
+   127→    <div className={`glass-card ${className}`}>
+   128→      {children}
+   129→    </div>
+   130→  );
+   131→}
+   132→
+   133→function GlassInput({
+   134→  label,
+   135→  icon: Icon,
+   136→  ...props
+   137→}: { label?: string; icon?: React.ComponentType<{ strokeWidth?: number; className?: string }> } & React.InputHTMLAttributes<HTMLInputElement>) {
+   138→  return (
+   139→    <div className="space-y-1.5">
+   140→      {label && (
+   141→        <label className="text-sm font-medium text-[#1D1D1F] tracking-tight flex items-center gap-2">
+   142→          {Icon && <Icon strokeWidth={1.25} className="w-4 h-4 text-[#86868B]" />}
+   143→          {label}
+   144→        </label>
+   145→      )}
+   146→      <input
+   147→        className="w-full bg-white/50 backdrop-blur-md border border-gray-200/50 rounded-xl px-4 py-3 text-base text-[#1D1D1F] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C00F7A]/30 focus:border-[#C00F7A]/50 transition-all"
+   148→        {...props}
+   149→      />
+   150→    </div>
+   151→  );
+   152→}
+   153→
+   154→function PrimaryButton({
+   155→  children,
+   156→  loading,
+   157→  className = '',
+   158→  ...props
+   159→}: { children: React.ReactNode; loading?: boolean; className?: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+   160→  return (
+   161→    <button
+   162→      className={`bg-[#C00F7A] text-white rounded-xl py-3 px-6 font-medium tracking-tight hover:bg-[#9A0C62] transition-colors shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${className}`}
+   163→      disabled={loading}
+   164→      {...props}
+   165→    >
+   166→      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+   167→      {children}
+   168→    </button>
+   169→  );
+   170→}
+   171→
+   172→function StatusBadge({ status }: { status: 'success' | 'skipped' | 'error' | 'unknown' | 'tracked' }) {
+   173→  const config = {
+   174→    success: { bg: 'bg-[#34C759]/10', text: 'text-[#34C759]', label: 'Sent' },
+   175→    tracked: { bg: 'bg-[#007AFF]/10', text: 'text-[#007AFF]', label: 'Tracked' },
+   176→    skipped: { bg: 'bg-[#FF9500]/10', text: 'text-[#FF9500]', label: 'Skipped' },
+   177→    error: { bg: 'bg-[#FF3B30]/10', text: 'text-[#FF3B30]', label: 'Error' },
+   178→    unknown: { bg: 'bg-[#86868B]/10', text: 'text-[#86868B]', label: 'Unknown' },
+   179→  };
+   180→  const cfg = config[status] || config.unknown;
+   181→
+   182→  return (
+   183→    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
+   184→      {cfg.label}
+   185→    </span>
+   186→  );
+   187→}
+   188→
+   189→function AppleSpinner({ text = 'Analyzing...' }: { text?: string }) {
+   190→  return (
+   191→    <div className="flex flex-col items-center justify-center gap-5 py-12">
+   192→      <div className="relative w-14 h-14">
+   193→        {[...Array(12)].map((_, i) => (
+   194→          <div
+   195→            key={i}
+   196→            className="absolute w-2 h-2 rounded-full"
+   197→            style={{
+   198→              backgroundColor: MAGENTA,
+   199→              top: '50%',
+   200→              left: '50%',
+   201→              transform: `rotate(${i * 30}deg) translateY(-20px)`,
+   202→              opacity: 1 - i * 0.07,
+   203→              animation: 'spinFade 1s linear infinite',
+   204→              animationDelay: `${i * 0.083}s`,
+   205→            }}
+   206→          />
+   207→        ))}
+   208→      </div>
+   209→      <p className="text-base font-medium text-[#1D1D1F] tracking-tight">{text}</p>
+   210→      <p className="text-xs text-[#86868B]">AI-powered extraction in progress</p>
+   211→    </div>
+   212→  );
+   213→}
+   214→
+   215→// ==================== HEADER ====================
+   216→
+   217→function Header() {
+   218→  return (
+   219→    <div className="flex flex-col items-center pt-6 sm:pt-8 pb-3 sm:pb-4">
+   220→      <p className="text-[13px] sm:text-[14px] text-[#777777] font-normal uppercase tracking-tight text-center"
+   221→        style={{ fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
+   222→      >
+   223→        VSUALDIGITALMEDIA
+   224→      </p>
+   225→      <p className="text-[9px] sm:text-[10px] text-[#777777] font-normal uppercase mt-0.5 text-center"
+   226→        style={{
+   227→          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+   228→          letterSpacing: '4px',
+   229→        }}
+   230→      >
+   231→        PROMOTIONAL MARKETING AGENCY
+   232→      </p>
+   233→    </div>
+   234→  );
+   235→}
+   236→
+   237→// ==================== SPLASH SCREEN (Device-optimized video) ====================
+   238→
+   239→function useDeviceType() {
+   240→  const [device, setDevice] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
+   241→    if (typeof window === 'undefined') return 'desktop';
+   242→    const w = window.innerWidth;
+   243→    if (w < 768) return 'mobile';
+   244→    if (w < 1024) return 'tablet';
+   245→    return 'desktop';
+   246→  });
+   247→  return device;
+   248→}
+   249→
+   250→function SplashScreen({ onComplete }: { onComplete: () => void }) {
+   251→  const [fading, setFading] = useState(false);
+   252→  const [phase, setPhase] = useState<'loading' | 'ready' | 'playing' | 'blocked'>('loading');
+   253→  const [videoProgress, setVideoProgress] = useState(0);
+   254→  const completedRef = useRef(false);
+   255→  const videoRef = useRef<HTMLVideoElement>(null);
+   256→  const device = useDeviceType();
+   257→
+   258→  const videoSrc = device === 'mobile' ? '/red-720p.mp4' : '/red-720p.mp4';
+   259→
+   260→  const triggerComplete = useCallback(() => {
+   261→    if (!completedRef.current) {
+   262→      completedRef.current = true;
+   263→      setFading(true);
+   264→      setTimeout(onComplete, 500);
+   265→    }
+   266→  }, [onComplete]);
+   267→
+   268→  const handleTimeUpdate = useCallback(() => {
+   269→    const vid = videoRef.current;
+   270→    if (vid && vid.duration > 0) {
+   271→      setVideoProgress((vid.currentTime / vid.duration) * 100);
+   272→    }
+   273→  }, []);
+   274→
+   275→  const handleVideoEnd = useCallback(() => {
+   276→    triggerComplete();
+   277→  }, [triggerComplete]);
+   278→
+   279→  const handleTap = useCallback(() => {
+   280→    if (phase === 'blocked') {
+   281→      const vid = videoRef.current;
+   282→      if (vid) {
+   283→        vid.play().then(() => setPhase('playing')).catch(() => triggerComplete());
+   284→      }
+   285→      return;
+   286→    }
+   287→    triggerComplete();
+   288→  }, [phase, triggerComplete]);
+   289→
+   290→  useEffect(() => {
+   291→    const vid = videoRef.current;
+   292→    if (!vid) return;
+   293→
+   294→    const onLoaded = () => {
+   295→      setPhase('ready');
+   296→      vid.play().then(() => {
+   297→        setPhase('playing');
+   298→      }).catch(() => {
+   299→        setPhase('blocked');
+   300→      });
+   301→    };
+   302→    vid.addEventListener('loadeddata', onLoaded);
+   303→
+   304→    return () => vid.removeEventListener('loadeddata', onLoaded);
+   305→  }, [videoSrc]);
+   306→
+   307→  useEffect(() => {
+   308→    const timer = setTimeout(() => {
+   309→      if (!completedRef.current) triggerComplete();
+   310→    }, 6000);
+   311→    return () => clearTimeout(timer);
+   312→  }, [triggerComplete]);
+   313→
+   314→  useEffect(() => {
+   315→    const onKey = (e: KeyboardEvent) => {
+   316→      if (e.key === 'Escape' || e.key === 'Enter') {
+   317→        e.preventDefault();
+   318→        triggerComplete();
+   319→      }
+   320→    };
+   321→    window.addEventListener('keydown', onKey);
+   322→    return () => window.removeEventListener('keydown', onKey);
+   323→  }, [triggerComplete]);
+   324→
+   325→  return (
+   326→    <div
+   327→      className={`splash-container ${fading ? 'splash-exit' : ''}`}
+   328→      onClick={handleTap}
+   329→      style={{ touchAction: 'manipulation', cursor: 'pointer' }}
+   330→      role="dialog"
+   331→      aria-label="Loading VSUAL"
+   332→    >
+   333→      {/* Poster image shown instantly while video loads */}
+   334→      <img
+   335→        src="/red-poster.jpg"
+   336→        alt=""
+   337→        className={`splash-poster ${phase !== 'loading' ? 'splash-poster-hidden' : ''}`}
+   338→        aria-hidden="true"
+   339→      />
+   340→
+   341→      {/* Video element */}
+   342→      <video
+   343→        ref={videoRef}
+   344→        className={`splash-video ${phase !== 'loading' ? 'splash-video-visible' : ''}`}
+   345→        src={videoSrc}
+   346→        autoPlay
+   347→        muted
+   348→        playsInline
+   349→        preload="auto"
+   350→        poster="/red-poster.jpg"
+   351→        onTimeUpdate={handleTimeUpdate}
+   352→        onEnded={handleVideoEnd}
+   353→      />
+   354→
+   355→      {/* Phase 1: Loading spinner */}
+   356→      {phase === 'loading' && (
+   357→        <div className="splash-loader">
+   358→          <div className="splash-loader-ring" />
+   359→          <p className="splash-loader-text">Loading</p>
+   360→        </div>
+   361→      )}
+   362→
+   363→      {/* Phase 2: Autoplay blocked (iOS Safari) */}
+   364→      {phase === 'blocked' && (
+   365→        <div className="splash-tap-overlay">
+   366→          <div className="splash-play-btn">
+   367→            <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+   368→              <polygon points="6,3 20,12 6,21" />
+   369→            </svg>
+   370→          </div>
+   371→          <p className="text-white/90 text-sm font-medium mt-3">Tap to Continue</p>
+   372→        </div>
+   373→      )}
+   374→
+   375→      {/* Phase 3: Playing - progress bar + skip hint */}
+   376→      {phase === 'playing' && !fading && (
+   377→        <div className="splash-bottom-bar">
+   378→          <div className="splash-progress-track">
+   379→            <div
+   380→              className="splash-progress-fill"
+   381→              style={{ width: `${videoProgress}%` }}
+   382→            />
+   383→          </div>
+   384→          <p className="splash-skip-hint">
+   385→            Skip <span className="splash-skip-hint-sep" aria-hidden="true">·</span> Tap anywhere
+   386→          </p>
+   387→        </div>
+   388→      )}
+   389→    </div>
+   390→  );
+   391→}
+   392→
+   393→// ==================== CAPTURE SCREEN ====================
+   394→
+   395→function CaptureScreen({
+   396→  brandedSelfie,
+   397→  cardBase64,
+   398→  cardWatermarked,
+   399→  cardUrl,
+   400→  contact,
+   401→  onCardCapture,
+   402→  onSelfieCapture,
+   403→  onRemoveSelfie,
+   404→  onRemoveCard,
+   405→  onCardUrlSubmit,
+   406→  onContinue,
+   407→}: {
+   408→  brandedSelfie: string | null;
+   409→  cardBase64: string | null;
+   410→  cardWatermarked: string | null;
+   411→  cardUrl: string | null;
+   412→  contact: Contact;
+   413→  onCardCapture: (file: File) => void;
+   414→  onSelfieCapture: (file: File) => void;
+   415→  onRemoveSelfie: () => void;
+   416→  onRemoveCard: () => void;
+   417→  onCardUrlSubmit: (url: string) => void;
+   418→  onContinue: () => void;
+   419→}) {
+   420→  const cardInputRef = useRef<HTMLInputElement>(null);
+   421→  const selfieInputRef = useRef<HTMLInputElement>(null);
+   422→  const [showUrlInput, setShowUrlInput] = useState(false);
+   423→  const [urlInput, setUrlInput] = useState('');
+   424→  const [urlLoading, setUrlLoading] = useState(false);
+   425→
+   426→  const hasSelfie = !!brandedSelfie;
+   427→  const hasCard = !!cardBase64;
+   428→  const canContinue = hasSelfie || hasCard;
+   429→
+   430→  const handleUrlSubmit = useCallback(() => {
+   431→    const trimmed = urlInput.trim();
+   432→    if (!trimmed) {
+   433→      toast.error('Please enter a valid URL');
+   434→      return;
+   435→    }
+   436→    try {
+   437→      new URL(trimmed);
+   438→    } catch {
+   439→      toast.error('Please enter a valid URL');
+   440→      return;
+   441→    }
+   442→    setUrlLoading(true);
+   443→    onCardUrlSubmit(trimmed);
+   444→    setUrlLoading(false);
+   445→  }, [urlInput, onCardUrlSubmit]);
+   446→
+   447→  return (
+   448→    <div className="flex flex-col min-h-[80vh] px-4 sm:px-6 gap-4 sm:gap-5 screen-fade-in">
+   449→      <Header />
+   450→
+   451→      {/* Title */}
+   452→      <div className="text-center px-4">
+   453→        <h1 className="text-2xl sm:text-3xl tracking-tighter font-semibold text-black mb-1.5">
+   454→          Instant Authority
+   455→        </h1>
+   456→        <p className="text-sm sm:text-base leading-relaxed text-[#86868B]">
+   457→          Capture card & selfie, then review & save
+   458→        </p>
+   459→      </div>
+   460→
+   461→      {/* Previews Section */}
+   462→      <div className="grid grid-cols-2 gap-3 w-full max-w-md mx-auto">
+   463→        {/* Selfie Preview */}
+   464→        {hasSelfie ? (
+   465→          <div className="relative rounded-xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-sm">
+   466→            <img
+   467→              src={`data:image/jpeg;base64,${brandedSelfie}`}
+   468→              alt="Branded Selfie"
+   469→              className="w-full h-32 sm:h-40 object-cover"
+   470→            />
+   471→            <button
+   472→              onClick={onRemoveSelfie}
+   473→              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center active:scale-90"
+   474→            >
+   475→              <X className="w-3.5 h-3.5 text-white" />
+   476→            </button>
+   477→            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
+   478→              <p className="text-[10px] text-white font-medium flex items-center gap-1">
+   479→                <Check className="w-3 h-3" /> Selfie captured
+   480→              </p>
+   481→            </div>
+   482→          </div>
+   483→        ) : (
+   484→          <button
+   485→            onClick={() => selfieInputRef.current?.click()}
+   486→            className="bg-[#C00F7A] text-white rounded-xl py-5 sm:py-7 px-4 sm:px-6 flex flex-col items-center justify-center gap-2 sm:gap-3 hover:bg-[#9A0C62] transition-all shadow-[0_4px_16px_rgba(192,15,122,0.3)] active:scale-95 border-2 border-[#C00F7A]"
+   487→          >
+   488→            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 flex items-center justify-center">
+   489→              <Camera strokeWidth={1.25} className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+   490→            </div>
+   491→            <span className="text-xs sm:text-sm font-medium tracking-tight">Take Selfie</span>
+   492→          </button>
+   493→        )}
+   494→
+   495→        {/* Card Preview */}
+   496→        {hasCard ? (
+   497→          <div className="relative rounded-xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-sm">
+   498→            <img
+   499→              src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`}
+   500→              alt="Business Card"
+   501→              className="w-full h-32 sm:h-40 object-cover"
+   502→            />
+   503→            <button
+   504→              onClick={onRemoveCard}
+   505→              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center active:scale-90"
+   506→            >
+   507→              <X className="w-3.5 h-3.5 text-white" />
+   508→            </button>
+   509→            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
+   510→              <p className="text-[10px] text-white font-medium flex items-center gap-1">
+   511→                <Check className="w-3 h-3" /> {cardUrl ? 'Card loaded' : 'Card scanned'}
+   512→              </p>
+   513→            </div>
+   514→          </div>
+   515→        ) : (
+   516→          <button
+   517→            onClick={() => cardInputRef.current?.click()}
+   518→            className="bg-white/60 backdrop-blur-xl border-2 border-[#C00F7A] text-[#1D1D1F] rounded-xl py-5 sm:py-7 px-4 sm:px-6 flex flex-col items-center justify-center gap-2 sm:gap-3 hover:bg-[#C00F7A]/10 transition-all shadow-[0_4px_16px_rgba(192,15,122,0.1)] active:scale-95"
+   519→          >
+   520→            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#C00F7A]/10 flex items-center justify-center">
+   521→              <CreditCard strokeWidth={1.25} className="w-5 h-5 sm:w-6 sm:h-6 text-[#C00F7A]" />
+   522→            </div>
+   523→            <span className="text-xs sm:text-sm font-medium tracking-tight">Scan Card</span>
+   524→          </button>
+   525→        )}
+   526→
+   527→        {/* Hidden file inputs */}
+   528→        <input
+   529→          ref={selfieInputRef}
+   530→          type="file"
+   531→          accept="image/*"
+   532→          capture="user"
+   533→          className="hidden"
+   534→          onChange={(e) => {
+   535→            const file = e.target.files?.[0];
+   536→            if (file) onSelfieCapture(file);
+   537→            e.target.value = '';
+   538→          }}
+   539→        />
+   540→        <input
+   541→          ref={cardInputRef}
+   542→          type="file"
+   543→          accept="image/*"
+   544→          capture="environment"
+   545→          className="hidden"
+   546→          onChange={(e) => {
+   547→            const file = e.target.files?.[0];
+   548→            if (file) onCardCapture(file);
+   549→            e.target.value = '';
+   550→          }}
+   551→        />
+   552→
+   553→        {/* Paste Card URL */}
+   554→        {!hasCard && (
+   555→          <div className="col-span-2">
+   556→            <button
+   557→              onClick={() => setShowUrlInput(!showUrlInput)}
+   558→              className="w-full text-xs text-center text-[#86868B] hover:text-[#C00F7A] transition-colors py-1 flex items-center justify-center gap-1"
+   559→            >
+   560→              <Link strokeWidth={1.25} className="w-3 h-3" />
+   561→              or paste card URL
+   562→            </button>
+   563→            {showUrlInput && (
+   564→              <div className="mt-2 flex gap-2">
+   565→                <input
+   566→                  type="url"
+   567→                  placeholder="https://example.com/card.jpg"
+   568→                  className="flex-1 bg-white/50 backdrop-blur-md border border-gray-200/50 rounded-xl px-3 py-2 text-xs text-[#1D1D1F] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C00F7A]/30 focus:border-[#C00F7A]/50 transition-all"
+   569→                  value={urlInput}
+   570→                  onChange={(e) => setUrlInput(e.target.value)}
+   571→                  onKeyDown={(e) => { if (e.key === 'Enter') handleUrlSubmit(); }}
+   572→                />
+   573→                <button
+   574→                  onClick={handleUrlSubmit}
+   575→                  disabled={urlLoading}
+   576→                  className="bg-[#C00F7A] text-white rounded-xl px-3 py-2 text-xs font-medium hover:bg-[#9A0C62] transition-colors active:scale-95 disabled:opacity-50 flex items-center gap-1"
+   577→                >
+   578→                  {urlLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+   579→                  Load
+   580→                </button>
+   581→              </div>
+   582→            )}
+   583→          </div>
+   584→        )}
+   585→      </div>
+   586→
+   587→      {/* OCR Extracted Data Preview */}
+   588→      {hasCard && (contact.name || contact.email || contact.company) && (
+   589→        <GlassCard className="p-3 sm:p-4 w-full max-w-md mx-auto">
+   590→          <p className="text-[10px] uppercase tracking-wider text-[#86868B] font-medium mb-2 flex items-center gap-1.5">
+   591→            <Zap className="w-3 h-3" /> AI Extracted from Card
+   592→          </p>
+   593→          <div className="grid grid-cols-1 gap-1.5">
+   594→            {contact.name && (
+   595→              <p className="text-sm text-[#1D1D1F]"><span className="text-[#86868B]">Name:</span> {contact.name}</p>
+   596→            )}
+   597→            {contact.company && (
+   598→              <p className="text-sm text-[#1D1D1F]"><span className="text-[#86868B]">Company:</span> {contact.company}</p>
+   599→            )}
+   600→            {contact.title && (
+   601→              <p className="text-sm text-[#1D1D1F]"><span className="text-[#86868B]">Title:</span> {contact.title}</p>
+   602→            )}
+   603→            {contact.email && (
+   604→              <p className="text-sm text-[#1D1D1F]"><span className="text-[#86868B]">Email:</span> {contact.email}</p>
+   605→            )}
+   606→            {contact.phone && (
+   607→              <p className="text-sm text-[#1D1D1F]"><span className="text-[#86868B]">Phone:</span> {contact.phone}</p>
+   608→            )}
+   609→          </div>
+   610→        </GlassCard>
+   611→      )}
+   612→
+   613→      {/* Capture count indicator */}
+   614→      <div className="flex items-center justify-center gap-3 text-xs text-[#86868B] w-full max-w-md mx-auto">
+   615→        <span className={`flex items-center gap-1 ${hasSelfie ? 'text-[#C00F7A] font-medium' : ''}`}>
+   616→          <Camera className="w-3.5 h-3.5" /> Selfie {hasSelfie ? '✓' : ''}
+   617→        </span>
+   618→        <span className="text-gray-300">|</span>
+   619→        <span className={`flex items-center gap-1 ${hasCard ? 'text-[#C00F7A] font-medium' : ''}`}>
+   620→          <CreditCard className="w-3.5 h-3.5" /> Card {hasCard ? '✓' : ''}
+   621→        </span>
+   622→      </div>
+   623→
+   624→      {/* Spacer */}
+   625→      <div className="flex-1" />
+   626→
+   627→      {/* Continue Button */}
+   628→      <div className="w-full max-w-md mx-auto pb-6 sm:pb-8 space-y-2">
+   629→        <PrimaryButton
+   630→          onClick={onContinue}
+   631→          disabled={!canContinue}
+   632→          className="w-full"
+   633→        >
+   634→          <ArrowRight strokeWidth={1.5} className="w-4 h-4" />
+   635→          {hasCard && hasSelfie ? 'Review & Save Contact' :
+   636→           hasCard ? 'Fill Details & Save' :
+   637→           'Fill Details & Save'}
+   638→        </PrimaryButton>
+   639→        {!canContinue && (
+   640→          <p className="text-center text-xs text-[#86868B]">
+   641→            Capture a selfie or scan a card to continue
+   642→          </p>
+   643→        )}
+   644→      </div>
+   645→    </div>
+   646→  );
+   647→}
+   648→
+   649→// ==================== CONTACT FORM ====================
+   650→
+   651→function ContactFormScreen({
+   652→  contact,
+   653→  setContact,
+   654→  brandedSelfie,
+   655→  cardWatermarked,
+   656→  cardBase64,
+   657→  cardUrl,
+   658→  onSubmit,
+   659→  onBack,
+   660→  onRescan,
+   661→  onRetakeSelfie,
+   662→  loading,
+   663→}: {
+   664→  contact: Contact;
+   665→  setContact: React.Dispatch<React.SetStateAction<Contact>>;
+   666→  brandedSelfie: string | null;
+   667→  cardWatermarked: string | null;
+   668→  cardBase64: string | null;
+   669→  cardUrl: string | null;
+   670→  onSubmit: () => void;
+   671→  onBack: () => void;
+   672→  onRescan: () => void;
+   673→  onRetakeSelfie: () => void;
+   674→  loading: boolean;
+   675→}) {
+   676→  return (
+   677→    <div className="px-4 sm:px-6 py-4 space-y-4 sm:space-y-5 screen-fade-in">
+   678→      <Header />
+   679→
+   680→      <div className="flex items-center gap-3 sm:gap-4">
+   681→        <button
+   682→          onClick={onBack}
+   683→          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/60 backdrop-blur-xl border border-[#C00F7A]/30 flex items-center justify-center active:scale-95 transition-transform"
+   684→        >
+   685→          <ArrowLeft strokeWidth={1.25} className="w-4 h-4 sm:w-5 sm:h-5 text-[#1D1D1F]" />
+   686→        </button>
+   687→        <h2 className="text-xl sm:text-2xl tracking-tight font-medium text-black">Review & Save</h2>
+   688→      </div>
+   689→
+   690→      {/* Captured Images Preview */}
+   691→      <div className="grid grid-cols-2 gap-3 w-full">
+   692→        {/* Branded Selfie Preview */}
+   693→        {brandedSelfie ? (
+   694→          <GlassCard className="p-2">
+   695→            <div className="relative rounded-lg overflow-hidden">
+   696→              <img
+   697→                src={`data:image/jpeg;base64,${brandedSelfie}`}
+   698→                alt="Branded Selfie"
+   699→                className="w-full h-32 sm:h-40 object-cover"
+   700→              />
+   701→              <div className="absolute top-1.5 right-1.5">
+   702→                <span className="px-1.5 py-0.5 rounded-full bg-[#C00F7A] text-white text-[9px] font-medium">Watermarked</span>
+   703→              </div>
+   704→            </div>
+   705→            <button
+   706→              onClick={onRetakeSelfie}
+   707→              className="mt-1.5 w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95"
+   708→              style={{ touchAction: 'manipulation' }}
+   709→            >
+   710→              <Camera className="w-3 h-3" /> Re-take
+   711→            </button>
+   712→          </GlassCard>
+   713→        ) : (
+   714→          <button
+   715→            onClick={onRetakeSelfie}
+   716→            className="rounded-xl border-2 border-dashed border-gray-200 py-5 flex flex-col items-center justify-center gap-2 text-[#86868B] hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95"
+   717→          >
+   718→            <Camera className="w-5 h-5" />
+   719→            <span className="text-xs font-medium">Add Selfie</span>
+   720→          </button>
+   721→        )}
+   722→
+   723→        {/* Business Card Preview */}
+   724→        {cardBase64 ? (
+   725→          <GlassCard className="p-2">
+   726→            <div className="relative rounded-lg overflow-hidden">
+   727→              <img
+   728→                src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`}
+   729→                alt="Business Card"
+   730→                className="w-full h-32 sm:h-40 object-cover"
+   731→              />
+   732→              <div className="absolute top-1.5 right-1.5">
+   733→                <span className="px-1.5 py-0.5 rounded-full bg-[#C00F7A] text-white text-[9px] font-medium">Watermarked</span>
+   734→              </div>
+   735→            </div>
+   736→            <button
+   737→              onClick={onRescan}
+   738→              className="mt-1.5 w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95"
+   739→              style={{ touchAction: 'manipulation' }}
+   740→            >
+   741→              <RefreshCw className="w-3 h-3" /> Re-scan
+   742→            </button>
+   743→          </GlassCard>
+   744→        ) : (
+   745→          <button
+   746→            onClick={onRescan}
+   747→            className="rounded-xl border-2 border-dashed border-gray-200 py-5 flex flex-col items-center justify-center gap-2 text-[#86868B] hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95"
+   748→          >
+   749→            <CreditCard className="w-5 h-5" />
+   750→            <span className="text-xs font-medium">Scan Card</span>
+   751→          </button>
+   752→        )}
+   753→      </div>
+   754→
+   755→      {/* Contact Form Fields */}
+   756→      <GlassCard className="p-4 sm:p-5 space-y-3 sm:space-y-4">
+   757→        <p className="text-xs font-medium text-[#86868B] uppercase tracking-wider mb-1">Contact Details</p>
+   758→        <GlassInput
+   759→          label="Name"
+   760→          icon={User}
+   761→          placeholder="John Doe"
+   762→          value={contact.name}
+   763→          onChange={(e) => setContact({ ...contact, name: e.target.value })}
+   764→        />
+   765→        <GlassInput
+   766→          label="Company"
+   767→          icon={Building2}
+   768→          placeholder="Acme Corp"
+   769→          value={contact.company}
+   770→          onChange={(e) => setContact({ ...contact, company: e.target.value })}
+   771→        />
+   772→        <GlassInput
+   773→          label="Title"
+   774→          icon={Briefcase}
+   775→          placeholder="Sales Director"
+   776→          value={contact.title}
+   777→          onChange={(e) => setContact({ ...contact, title: e.target.value })}
+   778→        />
+   779→        <GlassInput
+   780→          label="Email"
+   781→          icon={Mail}
+   782→          type="email"
+   783→          placeholder="john@acme.com"
+   784→          value={contact.email}
+   785→          onChange={(e) => setContact({ ...contact, email: e.target.value })}
+   786→        />
+   787→        <GlassInput
+   788→          label="Phone"
+   789→          icon={Phone}
+   790→          type="tel"
+   791→          placeholder="+1 555 123 4567"
+   792→          value={contact.phone}
+   793→          onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+   794→        />
+   795→        <GlassInput
+   796→          label="Address (Optional)"
+   797→          icon={MapPin}
+   798→          placeholder="123 Main St, City, State"
+   799→          value={contact.address}
+   800→          onChange={(e) => setContact({ ...contact, address: e.target.value })}
+   801→        />
+   802→      </GlassCard>
+   803→
+   804→      <div className="space-y-3 pb-6 sm:pb-8">
+   805→        <PrimaryButton onClick={onSubmit} loading={loading} className="w-full">
+   806→          <Check strokeWidth={1.5} className="w-4 h-4" />
+   807→          Confirm & Save
+   808→        </PrimaryButton>
+   809→
+   810→        <div className="flex items-center justify-center gap-3 text-xs text-[#86868B]">
+   811→          <span className="flex items-center gap-1"><Database strokeWidth={1.25} className="w-3.5 h-3.5" /> DB</span>
+   812→          <span className="flex items-center gap-1"><MessageCircle strokeWidth={1.25} className="w-3.5 h-3.5" /> WhatsApp</span>
+   813→        </div>
+   814→      </div>
+   815→    </div>
+   816→  );
+   817→}
+   818→
+   819→// ==================== WHATSAPP ICON ====================
+   820→
+   821→function WhatsAppIcon({ className = "w-4 h-4" }: { className?: string }) {
+   822→  return (
+   823→    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+   824→      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+   825→    </svg>
+   826→  );
+   827→}
+   828→
+   829→// ==================== HELPER: base64ToBlob ====================
+   830→function base64ToBlob(base64: string, mimeType: string): Blob {
+   831→  const binaryStr = atob(base64);
+   832→  const bytes = new Uint8Array(binaryStr.length);
+   833→  for (let i = 0; i < binaryStr.length; i++) {
+   834→    bytes[i] = binaryStr.charCodeAt(i);
+   835→  }
+   836→  return new Blob([bytes], { type: mimeType });
+   837→}
+   838→
+   839→// ==================== SUCCESS SCREEN ====================
+   840→
+   841→function SuccessScreen({
+   842→  results,
+   843→  contact,
+   844→  brandedSelfie,
+   845→  cardWatermarked,
+   846→  cardBase64,
+   847→  cardUrl,
+   848→  onReset,
+   849→}: {
+   850→  results: AutomationResults;
+   851→  contact: Contact;
+   852→  brandedSelfie: string | null;
+   853→  cardWatermarked: string | null;
+   854→  cardBase64: string | null;
+   855→  cardUrl: string | null;
+   856→  onReset: () => void;
+   857→}) {
+   858→  const [imageModal, setImageModal] = useState<{type: 'card' | 'selfie'; open: boolean}>({type: 'card', open: false});
+   859→
+   860→  const cardPreviewSrc = results.card_drive_url
+   861→    || cardUrl
+   862→    || (cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardBase64 ? `data:image/jpeg;base64,${cardBase64}` : null);
+   863→  const selfiePreviewSrc = results.selfie_drive_url
+   864→    || (brandedSelfie ? `data:image/jpeg;base64,${brandedSelfie}` : null);
+   865→
+   866→  const copyToClipboard = useCallback((text: string) => {
+   867→    navigator.clipboard.writeText(text).then(() => {
+   868→      toast.success('Link copied!');
+   869→    }).catch(() => {
+   870→      toast.error('Failed to copy');
+   871→    });
+   872→  }, []);
+   873→
+   874→  const buildWhatsAppText = useCallback(() => {
+   875→    const lines = [`*📋 New Contact: ${contact.name || 'N/A'}*`];
+   876→    if (contact.company) lines.push(`🏢 Company: ${contact.company}`);
+   877→    if (contact.title) lines.push(`💼 Title: ${contact.title}`);
+   878→    if (contact.email) lines.push(`📧 Email: ${contact.email}`);
+   879→    if (contact.phone) lines.push(`📱 Phone: ${contact.phone}`);
+   880→    if (contact.address) lines.push(`📍 Address: ${contact.address}`);
+   881→    lines.push('');
+   882→    lines.push('Status:');
+   883→    if (results.db_status === 'success') lines.push('✅ Saved to Database');
+   884→    lines.push('');
+   885→    lines.push('_VSUAL Networking App_');
+   886→    return lines.join('\n');
+   887→  }, [contact, results]);
+   888→
+   889→  const tryAutoShareWhatsApp = useCallback(() => {
+   890→    const text = buildWhatsAppText();
+   891→
+   892→    // Try Web Share API first (mobile)
+   893→    if (navigator.share && brandedSelfie) {
+   894→      try {
+   895→        const selfieBlob = base64ToBlob(brandedSelfie, 'image/jpeg');
+   896→        const files: File[] = [new File([selfieBlob], 'vsual-selfie.jpg', { type: 'image/jpeg' })];
+   897→
+   898→        if (cardWatermarked || cardBase64) {
+   899→          const cardBlob = base64ToBlob(cardWatermarked || cardBase64!, 'image/jpeg');
+   900→          files.push(new File([cardBlob], 'vsual-card.jpg', { type: 'image/jpeg' }));
+   901→        }
+   902→
+   903→        navigator.share({
+   904→          title: `New Contact: ${contact.name}`,
+   905→          text,
+   906→          files,
+   907→        }).catch(() => {
+   908→          navigator.share({
+   909→            title: `New Contact: ${contact.name}`,
+   910→            text,
+   911→          }).catch(() => {
+   912→            // User cancelled
+   913→          });
+   914→        });
+   915→        return;
+   916→      } catch {
+   917→        // Fallback to URL
+   918→      }
+   919→    }
+   920→
+   921→    // Fallback: WhatsApp URL
+   922→    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+   923→    window.open(url, '_blank');
+   924→  }, [buildWhatsAppText, contact.name, brandedSelfie, cardWatermarked, cardBase64]);
+   925→
+   926→  const shareToWhatsApp = useCallback(() => {
+   927→    tryAutoShareWhatsApp();
+   928→  }, [tryAutoShareWhatsApp]);
+   929→
+   930→  const openWhatsAppGroup = useCallback(() => {
+   931→    window.open(WHATSAPP_GROUP_LINK, '_blank');
+   932→  }, []);
+   933→
+   934→  const shareGeneral = useCallback(async () => {
+   935→    const text = `New Contact Captured: ${contact.name}${contact.company ? ' from ' + contact.company : ''}${contact.email ? ' (' + contact.email + ')' : ''}`;
+   936→    if (navigator.share) {
+   937→      try {
+   938→        await navigator.share({ title: 'VSUAL Contact', text });
+   939→        return;
+   940→      } catch {}
+   941→    }
+   942→    await navigator.clipboard.writeText(text);
+   943→    toast.success('Contact info copied to clipboard!');
+   944→  }, [contact]);
+   945→
+   946→  return (
+   947→    <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-4 sm:px-6 gap-4 sm:gap-5 screen-fade-in">
+   948→      <Header />
+   949→
+   950→      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#C00F7A]/10 flex items-center justify-center screen-slide-up">
+   951→        <Check strokeWidth={1.5} className="w-8 h-8 sm:w-10 sm:h-10 text-[#C00F7A]" />
+   952→      </div>
+   953→
+   954→      <div className="text-center px-4">
+   955→        <h2 className="text-xl sm:text-2xl tracking-tight font-medium text-black mb-2">All Done!</h2>
+   956→        <p className="text-sm sm:text-base leading-relaxed text-[#86868B]">{results.message}</p>
+   957→      </div>
+   958→
+   959→      {/* Captured Images Summary */}
+   960→      {(selfiePreviewSrc || cardPreviewSrc) && (
+   961→        <div className="flex gap-3 justify-center">
+   962→          {selfiePreviewSrc && (
+   963→            <button
+   964→              onClick={() => setImageModal({type: 'selfie', open: true})}
+   965→              className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-sm active:scale-95 transition-transform"
+   966→            >
+   967→              <img src={selfiePreviewSrc} alt="Selfie" className="w-full h-full object-cover" />
+   968→              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1">
+   969→                <p className="text-[9px] text-white font-medium">Selfie</p>
+   970→              </div>
+   971→              {results.selfie_drive_url && (
+   972→                <div className="absolute top-1 left-1">
+   973→                  <Cloud className="w-3 h-3 text-[#34C759]" fill="currentColor" />
+   974→                </div>
+   975→              )}
+   976→            </button>
+   977→          )}
+   978→          {cardPreviewSrc && (
+   979→            <button
+   980→              onClick={() => setImageModal({type: 'card', open: true})}
+   981→              className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-sm active:scale-95 transition-transform"
+   982→            >
+   983→              <img src={cardPreviewSrc} alt="Business Card" className="w-full h-full object-cover" />
+   984→              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1">
+   985→                <p className="text-[9px] text-white font-medium">Card</p>
+   986→              </div>
+   987→              {results.card_drive_url && (
+   988→                <div className="absolute top-1 left-1">
+   989→                  <Cloud className="w-3 h-3 text-[#34C759]" fill="currentColor" />
+   990→                </div>
+   991→              )}
+   992→            </button>
+   993→          )}
+   994→        </div>
+   995→      )}
+   996→
+   997→      {/* Image Preview Modal */}
+   998→      {imageModal.open && (
+   999→        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setImageModal({type: 'card', open: false})}>
+  1000→          <div className="relative max-w-[90vw] max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+  1001→            <button onClick={() => setImageModal({type: 'card', open: false})} className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center z-10 active:scale-90">
+  1002→              <X className="w-4 h-4 text-black" />
+  1003→            </button>
+  1004→            <img
+  1005→              src={imageModal.type === 'card' ? cardPreviewSrc : selfiePreviewSrc}
+  1006→              alt={imageModal.type === 'card' ? 'Business Card' : 'Selfie'}
+  1007→              className="max-w-full max-h-[75vh] rounded-xl shadow-2xl object-contain"
+  1008→            />
+  1009→            {(imageModal.type === 'card' && results.card_drive_url) && (
+  1010→              <div className="mt-3 flex items-center gap-2 justify-center">
+  1011→                <Cloud className="w-3.5 h-3.5 text-[#34C759]" />
+  1012→                <a href={results.card_drive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-white/80 hover:text-white underline truncate max-w-[250px]">{results.card_drive_url.split('/').pop()}</a>
+  1013→              </div>
+  1014→            )}
+  1015→            {(imageModal.type === 'selfie' && results.selfie_drive_url) && (
+  1016→              <div className="mt-3 flex items-center gap-2 justify-center">
+  1017→                <Cloud className="w-3.5 h-3.5 text-[#34C759]" />
+  1018→                <a href={results.selfie_drive_url} target="_blank" rel="noopener noreferrer" className="text-xs text-white/80 hover:text-white underline truncate max-w-[250px]">{results.selfie_drive_url.split('/').pop()}</a>
+  1019→              </div>
+  1020→            )}
+  1021→          </div>
+  1022→        </div>
+  1023→      )}
+  1024→
+  1025→      {/* Automation Status */}
+  1026→      <GlassCard className="p-4 sm:p-5 w-full max-w-sm space-y-3">
+  1027→        <p className="text-xs font-medium text-[#86868B] uppercase tracking-wider mb-2">Automation Status</p>
+  1028→
+  1029→        <div className="flex items-center justify-between">
+  1030→          <span className="text-sm text-[#86868B] flex items-center gap-2">
+  1031→            <Database strokeWidth={1.25} className="w-4 h-4" /> Database
+  1032→          </span>
+  1033→          <StatusBadge status={results.db_status} />
+  1034→        </div>
+  1035→        <div className="flex items-center justify-between">
+  1036→          <span className="text-sm text-[#86868B] flex items-center gap-2">
+  1037→            <Cloud strokeWidth={1.25} className="w-4 h-4" /> Cloud Storage
+  1038→          </span>
+  1039→          <StatusBadge status={results.drive_status} />
+  1040→        </div>
+  1041→        <div className="flex items-center justify-between">
+  1042→          <span className="text-sm text-[#86868B] flex items-center gap-2">
+  1043→            <WhatsAppIcon /> WhatsApp Group
+  1044→          </span>
+  1045→          <StatusBadge status={results.whatsapp_status} />
+  1046→        </div>
+  1047→      </GlassCard>
+  1048→
+  1049→      {/* Cloud Storage Preview Links */}
+  1050→      {(results.card_drive_url || results.selfie_drive_url) && (
+  1051→        <GlassCard className="p-4 sm:p-5 w-full max-w-sm space-y-2.5">
+  1052→          <p className="text-xs font-medium text-[#86868B] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+  1053→            <Cloud strokeWidth={1.25} className="w-3.5 h-3.5 text-[#34C759]" />
+  1054→            Uploaded to Cloud Storage
+  1055→          </p>
+  1056→
+  1057→          {results.card_drive_url && (
+  1058→            <div className="space-y-1">
+  1059→              <p className="text-[11px] text-[#86868B] font-medium">Business Card Preview Link:</p>
+  1060→              <div className="flex items-center gap-2 bg-white/50 rounded-lg px-3 py-2">
+  1061→                <ImageIcon strokeWidth={1.25} className="w-3.5 h-3.5 text-[#C00F7A] shrink-0" />
+  1062→                <p className="text-[11px] text-[#1D1D1F] truncate flex-1">{results.card_drive_url}</p>
+  1063→                <button
+  1064→                  onClick={() => copyToClipboard(results.card_drive_url!)}
+  1065→                  className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0 active:scale-90"
+  1066→                  title="Copy link"
+  1067→                >
+  1068→                  <Link strokeWidth={1.25} className="w-3.5 h-3.5" />
+  1069→                </button>
+  1070→                <a
+  1071→                  href={results.card_drive_url}
+  1072→                  target="_blank"
+  1073→                  rel="noopener noreferrer"
+  1074→                  className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0"
+  1075→                  title="Open in new tab"
+  1076→                >
+  1077→                  <ExternalLink strokeWidth={1.25} className="w-3.5 h-3.5" />
+  1078→                </a>
+  1079→              </div>
+  1080→            </div>
+  1081→          )}
+  1082→
+  1083→          {results.selfie_drive_url && (
+  1084→            <div className="space-y-1">
+  1085→              <p className="text-[11px] text-[#86868B] font-medium">Selfie Preview Link:</p>
+  1086→              <div className="flex items-center gap-2 bg-white/50 rounded-lg px-3 py-2">
+  1087→                <ImageIcon strokeWidth={1.25} className="w-3.5 h-3.5 text-[#C00F7A] shrink-0" />
+  1088→                <p className="text-[11px] text-[#1D1D1F] truncate flex-1">{results.selfie_drive_url}</p>
+  1089→                <button
+  1090→                  onClick={() => copyToClipboard(results.selfie_drive_url!)}
+  1091→                  className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0 active:scale-90"
+  1092→                  title="Copy link"
+  1093→                >
+  1094→                  <Link strokeWidth={1.25} className="w-3.5 h-3.5" />
+  1095→                </button>
+  1096→                <a
+  1097→                  href={results.selfie_drive_url}
+  1098→                  target="_blank"
+  1099→                  rel="noopener noreferrer"
+  1100→                  className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0"
+  1101→                  title="Open in new tab"
+  1102→                >
+  1103→                  <ExternalLink strokeWidth={1.25} className="w-3.5 h-3.5" />
+  1104→                </a>
+  1105→              </div>
+  1106→            </div>
+  1107→          )}
+  1108→        </GlassCard>
+  1109→      )}
+  1110→
+  1111→      {/* WhatsApp + Share buttons */}
+  1112→      <div className="w-full max-w-sm space-y-2">
+  1113→        <button
+  1114→          onClick={shareToWhatsApp}
+  1115→          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-medium transition-all active:scale-95"
+  1116→          style={{ backgroundColor: '#25D366', color: 'white' }}
+  1117→        >
+  1118→          <WhatsAppIcon className="w-5 h-5" />
+  1119→          Share Contact to WhatsApp
+  1120→        </button>
+  1121→        <div className="grid grid-cols-2 gap-2">
+  1122→          <button
+  1123→            onClick={openWhatsAppGroup}
+  1124→            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-medium text-[#86868B] hover:text-[#1D1D1F] transition-colors"
+  1125→          >
+  1126→            <MessageCircle strokeWidth={1.25} className="w-4 h-4" />
+  1127→            WhatsApp Group
+  1128→          </button>
+  1129→          <button
+  1130→            onClick={shareGeneral}
+  1131→            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-medium text-[#86868B] hover:text-[#1D1D1F] transition-colors"
+  1132→          >
+  1133→            <Share2 strokeWidth={1.25} className="w-4 h-4" />
+  1134→            Share
+  1135→          </button>
+  1136→        </div>
+  1137→      </div>
+  1138→
+  1139→      <PrimaryButton onClick={onReset} className="mt-2">
+  1140→        <RefreshCw strokeWidth={1.5} className="w-4 h-4" />
+  1141→        New Capture
+  1142→      </PrimaryButton>
+  1143→    </div>
+  1144→  );
+  1145→}
+  1146→
+  1147→// ==================== AGENT CHAT ====================
+  1148→
+  1149→function AgentChat() {
+  1150→  const [messages, setMessages] = useState<ChatMessage[]>([
+  1151→    {
+  1152→      id: 'welcome',
+  1153→      role: 'assistant',
+  1154→      content: "Hi! I'm your VSUAL Assistant. I can help you with networking strategies, marketing campaigns, brand growth, and more. How can I help you today?",
+  1155→      timestamp: new Date(),
+  1156→    },
+  1157→  ]);
+  1158→  const [input, setInput] = useState('');
+  1159→  const [loading, setLoading] = useState(false);
+  1160→  const messagesEndRef = useRef<HTMLDivElement>(null);
+  1161→  const sessionIdRef = useRef(`session-${Date.now()}`);
+  1162→
+  1163→  const scrollToBottom = useCallback(() => {
+  1164→    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  1165→  }, []);
+  1166→
+  1167→  useEffect(() => {
+  1168→    scrollToBottom();
+  1169→  }, [messages, scrollToBottom]);
+  1170→
+  1171→  const handleSend = async () => {
+  1172→    const trimmed = input.trim();
+  1173→    if (!trimmed || loading) return;
+  1174→
+  1175→    const userMsg: ChatMessage = {
+  1176→      id: `user-${Date.now()}`,
+  1177→      role: 'user',
+  1178→      content: trimmed,
+  1179→      timestamp: new Date(),
+  1180→    };
+  1181→
+  1182→    setMessages((prev) => [...prev, userMsg]);
+  1183→    setInput('');
+  1184→    setLoading(true);
+  1185→
+  1186→    try {
+  1187→      const response = await fetch('/api/chat', {
+  1188→        method: 'POST',
+  1189→        headers: { 'Content-Type': 'application/json' },
+  1190→        body: JSON.stringify({
+  1191→          messages: messages
+  1192→            .filter((m) => m.id !== 'welcome')
+  1193→            .concat(userMsg)
+  1194→            .map((m) => ({ role: m.role, content: m.content })),
+  1195→          session_id: sessionIdRef.current,
+  1196→        }),
+  1197→      });
+  1198→
+  1199→      const data = await response.json();
+  1200→
+  1201→      if (data.error) {
+  1202→        toast.error(data.error);
+  1203→        return;
+  1204→      }
+  1205→
+  1206→      const assistantMsg: ChatMessage = {
+  1207→        id: `assistant-${Date.now()}`,
+  1208→        role: 'assistant',
+  1209→        content: data.message,
+  1210→        timestamp: new Date(),
+  1211→      };
+  1212→
+  1213→      setMessages((prev) => [...prev, assistantMsg]);
+  1214→    } catch {
+  1215→      toast.error('Failed to get a response. Please try again.');
+  1216→    } finally {
+  1217→      setLoading(false);
+  1218→    }
+  1219→  };
+  1220→
+  1221→  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  1222→    if (e.key === 'Enter' && !e.shiftKey) {
+  1223→      e.preventDefault();
+  1224→      handleSend();
+  1225→    }
+  1226→  };
+  1227→
+  1228→  return (
+  1229→    <div className="flex flex-col h-[calc(100vh-120px)] sm:h-[calc(100vh-140px)]">
+  1230→      {/* Messages Area */}
+  1231→      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4 vsual-scrollbar">
+  1232→        {messages.map((msg) => (
+  1233→          <div
+  1234→            key={msg.id}
+  1235→            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} screen-slide-up`}
+  1236→          >
+  1237→            <div
+  1238→              className={`max-w-[85%] sm:max-w-[75%] px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-[14px] sm:text-[15px] leading-relaxed ${
+  1239→                msg.role === 'user'
+  1240→                  ? 'bg-[#C00F7A] text-white rounded-br-md'
+  1241→                  : 'glass-card text-[#1D1D1F] rounded-bl-md'
+  1242→              }`}
+  1243→            >
+  1244→              {msg.content}
+  1245→            </div>
+  1246→          </div>
+  1247→        ))}
+  1248→
+  1249→        {loading && (
+  1250→          <div className="flex justify-start">
+  1251→            <div className="glass-card px-4 py-3 rounded-2xl rounded-bl-md">
+  1252→              <div className="flex items-center gap-1.5">
+  1253→                <span className="w-2 h-2 rounded-full bg-[#C00F7A] typewriter-dot" />
+  1254→                <span className="w-2 h-2 rounded-full bg-[#C00F7A] typewriter-dot" />
+  1255→                <span className="w-2 h-2 rounded-full bg-[#C00F7A] typewriter-dot" />
+  1256→              </div>
+  1257→            </div>
+  1258→          </div>
+  1259→        )}
+  1260→
+  1261→        <div ref={messagesEndRef} />
+  1262→      </div>
+  1263→
+  1264→      {/* Input Area */}
+  1265→      <div className="px-3 sm:px-4 pb-4 sm:pb-6 pt-3">
+  1266→        <div className="glass-card flex items-center gap-3 px-3 sm:px-4 py-3">
+  1267→          <input
+  1268→            type="text"
+  1269→            value={input}
+  1270→            onChange={(e) => setInput(e.target.value)}
+  1271→            onKeyDown={handleKeyDown}
+  1272→            placeholder="Ask VSUAL Assistant..."
+  1273→            className="flex-1 bg-transparent text-[#1D1D1F] text-sm sm:text-base placeholder:text-[#86868B] focus:outline-none"
+  1274→            disabled={loading}
+  1275→          />
+  1276→          <button
+  1277→            onClick={handleSend}
+  1278→            disabled={loading || !input.trim()}
+  1279→            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#C00F7A] text-white flex items-center justify-center hover:bg-[#9A0C62] transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-90 shrink-0"
+  1280→          >
+  1281→            <Send strokeWidth={1.25} className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+  1282→          </button>
+  1283→        </div>
+  1284→      </div>
+  1285→    </div>
+  1286→  );
+  1287→}
+  1288→
+  1289→// ==================== MODE TOGGLE ====================
+  1290→
+  1291→function ModeToggle({
+  1292→  mode,
+  1293→  onModeChange,
+  1294→}: {
+  1295→  mode: AppMode;
+  1296→  onModeChange: (mode: AppMode) => void;
+  1297→}) {
+  1298→  return (
+  1299→    <div className="glass-card mx-3 sm:mx-4 mt-3 sm:mt-4 p-1 flex items-center gap-1">
+  1300→      <button
+  1301→        onClick={() => onModeChange('networking')}
+  1302→        className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium tracking-tight transition-all ${
+  1303→          mode === 'networking'
+  1304→            ? 'bg-[#C00F7A] text-white shadow-sm'
+  1305→            : 'text-[#86868B] hover:text-[#1D1D1F]'
+  1306→        }`}
+  1307→      >
+  1308→        <HomeIcon strokeWidth={1.25} className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+  1309→        Capture
+  1310→      </button>
+  1311→      <button
+  1312→        onClick={() => onModeChange('chat')}
+  1313→        className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-medium tracking-tight transition-all ${
+  1314→          mode === 'chat'
+  1315→            ? 'bg-[#C00F7A] text-white shadow-sm'
+  1316→            : 'text-[#86868B] hover:text-[#1D1D1F]'
+  1317→        }`}
+  1318→      >
+  1319→        <MessageCircle strokeWidth={1.25} className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+  1320→        Agent Chat
+  1321→      </button>
+  1322→    </div>
+  1323→  );
+  1324→}
+  1325→
+  1326→// ==================== MAIN PAGE ====================
+  1327→
+  1328→export default function Home() {
+  1329→  const [showSplash, setShowSplash] = useState(true);
+  1330→  const [mode, setMode] = useState<AppMode>('networking');
+  1331→  const [step, setStep] = useState<AppStep>('capture');
+  1332→  const [contact, setContact] = useState<Contact>({
+  1333→    name: '',
+  1334→    company: '',
+  1335→    title: '',
+  1336→    email: '',
+  1337→    phone: '',
+  1338→    address: '',
+  1339→  });
+  1340→  const [brandedSelfie, setBrandedSelfie] = useState<string | null>(null);
+  1341→  const [cardBase64, setCardBase64] = useState<string | null>(null);
+  1342→  const [cardWatermarked, setCardWatermarked] = useState<string | null>(null);
+  1343→  const [cardUrl, setCardUrl] = useState<string | null>(null);
+  1344→  const [automationResults, setAutomationResults] = useState<AutomationResults | null>(null);
+  1345→  const [analyzeText, setAnalyzeText] = useState('Analyzing...');
+  1346→  const [isSubmitting, setIsSubmitting] = useState(false);
+  1347→
+  1348→  const handleSplashComplete = useCallback(() => {
+  1349→    setShowSplash(false);
+  1350→  }, []);
+  1351→
+  1352→  // ---- SELFIE CAPTURE: Watermark + stay on capture screen ----
+  1353→  const handleSelfieCapture = useCallback(async (file: File) => {
+  1354→    try {
+  1355→      setStep('analyzing');
+  1356→      setAnalyzeText('Branding your selfie...');
+  1357→      const rawBase64 = await fileToBase64(file);
+  1358→      const compressed = await compressImage(rawBase64, 600, 0.85);
+  1359→
+  1360→      // Apply VSUAL V-logo watermark
+  1361→      try {
+  1362→        const wmResponse = await fetch('/api/watermark-selfie', {
+  1363→          method: 'POST',
+  1364→          headers: { 'Content-Type': 'application/json' },
+  1365→          body: JSON.stringify({ image_base64: compressed }),
+  1366→        });
+  1367→        const wmData = await wmResponse.json();
+  1368→        if (wmData.success && wmData.watermarked_base64) {
+  1369→          setBrandedSelfie(wmData.watermarked_base64);
+  1370→        } else {
+  1371→          setBrandedSelfie(compressed);
+  1372→        }
+  1373→      } catch {
+  1374→        setBrandedSelfie(compressed);
+  1375→      }
+  1376→
+  1377→      toast.success('Selfie captured with VSUAL watermark!');
+  1378→      setStep('capture');
+  1379→    } catch {
+  1380→      toast.error('Failed to process selfie. Please try again.');
+  1381→      setStep('capture');
+  1382→    }
+  1383→  }, []);
+  1384→
+  1385→  // ---- CARD CAPTURE: OCR + Watermark + stay on capture screen ----
+  1386→  const handleCardCapture = useCallback(async (file: File) => {
+  1387→    try {
+  1388→      setStep('analyzing');
+  1389→      setAnalyzeText('Scanning business card...');
+  1390→      const rawBase64 = await fileToBase64(file);
+  1391→      const compressed = await compressImage(rawBase64, 800, 0.85);
+  1392→      setCardBase64(compressed);
+  1393→
+  1394→      // Step 1: OCR to extract contact info
+  1395→      try {
+  1396→        const ocrResponse = await fetch('/api/ocr', {
+  1397→          method: 'POST',
+  1398→          headers: { 'Content-Type': 'application/json' },
+  1399→          body: JSON.stringify({ image_base64: compressed }),
+  1400→        });
+  1401→
+  1402→        if (ocrResponse.ok) {
+  1403→          const data = await ocrResponse.json();
+  1404→          const ocrProvider = data.ocr_provider || 'AI OCR';
+  1405→
+  1406→          const extractedFields: Record<string, string> = {};
+  1407→          if (data.name) extractedFields.name = data.name;
+  1408→          if (data.company) extractedFields.company = data.company;
+  1409→          if (data.title) extractedFields.title = data.title;
+  1410→          if (data.email) extractedFields.email = data.email;
+  1411→          if (data.phone) extractedFields.phone = data.phone;
+  1412→          if (data.address) extractedFields.address = data.address;
+  1413→
+  1414→          if (Object.keys(extractedFields).length > 0) {
+  1415→            setContact({
+  1416→              name: data.name || '',
+  1417→              company: data.company || '',
+  1418→              title: data.title || '',
+  1419→              email: data.email || '',
+  1420→              phone: data.phone || '',
+  1421→              address: data.address || '',
+  1422→            });
+  1423→            const fieldCount = Object.keys(extractedFields).length;
+  1424→            toast.success(`${ocrProvider}: ${fieldCount} field${fieldCount > 1 ? 's' : ''} extracted`);
+  1425→          } else {
+  1426→            toast.info('Card scanned. Fill in details manually.');
+  1427→          }
+  1428→        } else {
+  1429→          toast.info('Card captured. Fill in details manually.');
+  1430→        }
+  1431→      } catch (ocrErr) {
+  1432→        console.error('OCR failed:', ocrErr);
+  1433→        toast.info('Card captured. Fill in details manually.');
+  1434→      }
+  1435→
+  1436→      // Step 2: Apply watermark to business card
+  1437→      try {
+  1438→        setAnalyzeText('Applying watermark...');
+  1439→        const wmResponse = await fetch('/api/watermark-selfie', {
+  1440→          method: 'POST',
+  1441→          headers: { 'Content-Type': 'application/json' },
+  1442→          body: JSON.stringify({ image_base64: compressed }),
+  1443→        });
+  1444→        const wmData = await wmResponse.json();
+  1445→        if (wmData.success && wmData.watermarked_base64) {
+  1446→          setCardWatermarked(wmData.watermarked_base64);
+  1447→        }
+  1448→      } catch {
+  1449→        // Watermark failed - not critical
+  1450→      }
+  1451→
+  1452→      toast.success('Business card scanned!');
+  1453→      setStep('capture');
+  1454→    } catch {
+  1455→      toast.error('Failed to process card image. Please try again.');
+  1456→      setStep('capture');
+  1457→    }
+  1458→  }, []);
+  1459→
+  1460→  // ---- REMOVE SELFIE ----
+  1461→  const handleRemoveSelfie = useCallback(() => {
+  1462→    setBrandedSelfie(null);
+  1463→    toast.info('Selfie removed. Take a new one.');
+  1464→  }, []);
+  1465→
+  1466→  // ---- REMOVE CARD ----
+  1467→  const handleRemoveCard = useCallback(() => {
+  1468→    setCardBase64(null);
+  1469→    setCardWatermarked(null);
+  1470→    setCardUrl(null);
+  1471→    setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' });
+  1472→    toast.info('Card removed. Scan a new one.');
+  1473→  }, []);
+  1474→
+  1475→  // ---- CARD URL SUBMIT ----
+  1476→  const handleCardUrlSubmit = useCallback(async (url: string) => {
+  1477→    try {
+  1478→      setStep('analyzing');
+  1479→      setAnalyzeText('Loading card from URL...');
+  1480→      setCardUrl(url);
+  1481→
+  1482→      const rawBase64 = await urlToBase64(url);
+  1483→      const compressed = await compressImage(rawBase64, 800, 0.85);
+  1484→      setCardBase64(compressed);
+  1485→
+  1486→      // Step 1: OCR
+  1487→      try {
+  1488→        setAnalyzeText('Scanning business card...');
+  1489→        const ocrResponse = await fetch('/api/ocr', {
+  1490→          method: 'POST',
+  1491→          headers: { 'Content-Type': 'application/json' },
+  1492→          body: JSON.stringify({ image_base64: compressed }),
+  1493→        });
+  1494→
+  1495→        if (ocrResponse.ok) {
+  1496→          const data = await ocrResponse.json();
+  1497→          const ocrProvider = data.ocr_provider || 'AI OCR';
+  1498→
+  1499→          const extractedFields: Record<string, string> = {};
+  1500→          if (data.name) extractedFields.name = data.name;
+  1501→          if (data.company) extractedFields.company = data.company;
+  1502→          if (data.title) extractedFields.title = data.title;
+  1503→          if (data.email) extractedFields.email = data.email;
+  1504→          if (data.phone) extractedFields.phone = data.phone;
+  1505→          if (data.address) extractedFields.address = data.address;
+  1506→
+  1507→          if (Object.keys(extractedFields).length > 0) {
+  1508→            setContact({
+  1509→              name: data.name || '',
+  1510→              company: data.company || '',
+  1511→              title: data.title || '',
+  1512→              email: data.email || '',
+  1513→              phone: data.phone || '',
+  1514→              address: data.address || '',
+  1515→            });
+  1516→            const fieldCount = Object.keys(extractedFields).length;
+  1517→            toast.success(`${ocrProvider}: ${fieldCount} field${fieldCount > 1 ? 's' : ''} extracted`);
+  1518→          } else {
+  1519→            toast.info('Card loaded. Fill in details manually.');
+  1520→          }
+  1521→        } else {
+  1522→          toast.info('Card loaded. Fill in details manually.');
+  1523→        }
+  1524→      } catch (ocrErr) {
+  1525→        console.error('OCR failed:', ocrErr);
+  1526→        toast.info('Card loaded. Fill in details manually.');
+  1527→      }
+  1528→
+  1529→      // Step 2: Apply watermark
+  1530→      try {
+  1531→        setAnalyzeText('Applying watermark...');
+  1532→        const wmResponse = await fetch('/api/watermark-selfie', {
+  1533→          method: 'POST',
+  1534→          headers: { 'Content-Type': 'application/json' },
+  1535→          body: JSON.stringify({ image_base64: compressed }),
+  1536→        });
+  1537→        const wmData = await wmResponse.json();
+  1538→        if (wmData.success && wmData.watermarked_base64) {
+  1539→          setCardWatermarked(wmData.watermarked_base64);
+  1540→        }
+  1541→      } catch {
+  1542→        // Watermark failed - not critical
+  1543→      }
+  1544→
+  1545→      toast.success('Business card loaded from URL!');
+  1546→      setStep('capture');
+  1547→    } catch {
+  1548→      toast.error('Failed to load image from URL. Check the link and try again.');
+  1549→      setCardUrl(null);
+  1550→      setStep('capture');
+  1551→    }
+  1552→  }, []);
+  1553→
+  1554→  // ---- CONTINUE TO FORM ----
+  1555→  const handleContinueToForm = useCallback(() => {
+  1556→    setStep('form');
+  1557→  }, []);
+  1558→
+  1559→  // ---- SUBMIT: Save to DB ----
+  1560→  const handleTriggerAutomation = useCallback(async () => {
+  1561→    setStep('automating');
+  1562→    setIsSubmitting(true);
+  1563→
+  1564→    try {
+  1565→      const saveResponse = await fetch('/api/save-contact', {
+  1566→        method: 'POST',
+  1567→        headers: { 'Content-Type': 'application/json' },
+  1568→        body: JSON.stringify({
+  1569→          name: contact.name,
+  1570→          company: contact.company,
+  1571→          title: contact.title,
+  1572→          email: contact.email,
+  1573→          phone: contact.phone,
+  1574→          address: contact.address,
+  1575→          selfie_base64: brandedSelfie || undefined,
+  1576→          card_base64: cardWatermarked || cardBase64 || undefined,
+  1577→          source: 'VSUAL Networking App',
+  1578→        }),
+  1579→      });
+  1580→
+  1581→      const data = await saveResponse.json();
+  1582→
+  1583→      if (data.error) {
+  1584→        toast.error(data.error);
+  1585→        setStep('form');
+  1586→        setIsSubmitting(false);
+  1587→        return;
+  1588→      }
+  1589→
+  1590→      const results: AutomationResults = {
+  1591→        success: data.success,
+  1592→        message: data.message,
+  1593→        ghl_status: data.ghl_status || 'unknown',
+  1594→        drive_status: data.drive_status || 'unknown',
+  1595→        db_status: data.db_status || 'unknown',
+  1596→        whatsapp_status: data.whatsapp_status || 'unknown',
+  1597→        selfie_drive_url: data.selfie_drive_url,
+  1598→        card_drive_url: data.card_drive_url,
+  1599→      };
+  1600→
+  1601→      if (results.db_status === 'success') toast.success('Saved to database!');
+  1602→      if (results.db_status === 'error') toast.error('Database save failed.');
+  1603→
+  1604→      setAutomationResults(results);
+  1605→      setStep('success');
+  1606→    } catch {
+  1607→      toast.error('Save failed. Please try again.');
+  1608→      setStep('form');
+  1609→    } finally {
+  1610→      setIsSubmitting(false);
+  1611→    }
+  1612→  }, [contact, brandedSelfie, cardWatermarked, cardBase64]);
+  1613→
+  1614→  // ---- RESET ----
+  1615→  const handleReset = useCallback(() => {
+  1616→    setStep('capture');
+  1617→    setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' });
+  1618→    setBrandedSelfie(null);
+  1619→    setCardBase64(null);
+  1620→    setCardWatermarked(null);
+  1621→    setCardUrl(null);
+  1622→    setAutomationResults(null);
+  1623→  }, []);
+  1624→
+  1625→  // ---- RE-SCAN / RE-TAKE SELFIE ----
+  1626→  const handleRescan = useCallback(() => {
+  1627→    setCardBase64(null);
+  1628→    setCardWatermarked(null);
+  1629→    setCardUrl(null);
+  1630→    setStep('capture');
+  1631→  }, []);
+  1632→
+  1633→  const handleRetakeSelfie = useCallback(() => {
+  1634→    setBrandedSelfie(null);
+  1635→    setStep('capture');
+  1636→  }, []);
+  1637→
+  1638→  const handleModeChange = useCallback((newMode: AppMode) => {
+  1639→    setMode(newMode);
+  1640→  }, []);
+  1641→
+  1642→  return (
+  1643→    <div
+  1644→      className="w-full max-w-[428px] lg:max-w-[480px] mx-auto min-h-screen relative overflow-hidden bg-[#FBFBFD]"
+  1645→      style={{
+  1646→        fontFamily:
+  1647→          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  1648→      }}
+  1649→    >
+  1650→      {/* Splash Screen */}
+  1651→      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
+  1652→
+  1653→      {/* Main Content */}
+  1654→      {!showSplash && (
+  1655→        <div className="screen-fade-in flex flex-col min-h-screen">
+  1656→          {/* Mode Toggle */}
+  1657→          <ModeToggle mode={mode} onModeChange={handleModeChange} />
+  1658→
+  1659→          {/* Networking Mode */}
+  1660→          {mode === 'networking' && (
+  1661→            <main className="flex-1">
+  1662→              {step === 'capture' && (
+  1663→                <CaptureScreen
+  1664→                  brandedSelfie={brandedSelfie}
+  1665→                  cardBase64={cardBase64}
+  1666→                  cardWatermarked={cardWatermarked}
+  1667→                  cardUrl={cardUrl}
+  1668→                  contact={contact}
+  1669→                  onCardCapture={handleCardCapture}
+  1670→                  onSelfieCapture={handleSelfieCapture}
+  1671→                  onRemoveSelfie={handleRemoveSelfie}
+  1672→                  onRemoveCard={handleRemoveCard}
+  1673→                  onCardUrlSubmit={handleCardUrlSubmit}
+  1674→                  onContinue={handleContinueToForm}
+  1675→                />
+  1676→              )}
+  1677→
+  1678→              {step === 'analyzing' && (
+  1679→                <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-4 sm:px-6 screen-fade-in">
+  1680→                  <Header />
+  1681→                  {cardBase64 && !cardWatermarked && (
+  1682→                    <div className="mb-4 w-full max-w-[200px]">
+  1683→                      <div className="glass-card p-2 rounded-lg overflow-hidden">
+  1684→                        <img
+  1685→                          src={cardUrl || `data:image/jpeg;base64,${cardBase64}`}
+  1686→                          alt="Scanning card"
+  1687→                          className="w-full h-auto rounded-md opacity-80"
+  1688→                        />
+  1689→                      </div>
+  1690→                      <p className="text-[10px] text-[#86868B] text-center mt-1.5">{cardUrl ? 'Loading card...' : 'Scanning this card...'}</p>
+  1691→                    </div>
+  1692→                  )}
+  1693→                  {!cardBase64 && (
+  1694→                    <div className="mb-4 w-full max-w-[200px]">
+  1695→                      <div className="glass-card p-2 rounded-lg overflow-hidden flex items-center justify-center h-28">
+  1696→                        <Camera className="w-8 h-8 text-[#C00F7A] animate-pulse" />
+  1697→                      </div>
+  1698→                      <p className="text-[10px] text-[#86868B] text-center mt-1.5">Processing selfie...</p>
+  1699→                    </div>
+  1700→                  )}
+  1701→                  <AppleSpinner text={analyzeText} />
+  1702→                </div>
+  1703→              )}
+  1704→
+  1705→              {step === 'form' && (
+  1706→                <ContactFormScreen
+  1707→                  contact={contact}
+  1708→                  setContact={setContact}
+  1709→                  brandedSelfie={brandedSelfie}
+  1710→                  cardWatermarked={cardWatermarked}
+  1711→                  cardBase64={cardBase64}
+  1712→                  cardUrl={cardUrl}
+  1713→                  onSubmit={handleTriggerAutomation}
+  1714→                  onBack={handleReset}
+  1715→                  onRescan={handleRescan}
+  1716→                  onRetakeSelfie={handleRetakeSelfie}
+  1717→                  loading={isSubmitting}
+  1718→                />
+  1719→              )}
+  1720→
+  1721→              {step === 'automating' && (
+  1722→                <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-4 sm:px-6 screen-fade-in">
+  1723→                  <Header />
+  1724→                  <AppleSpinner text="Triggering automations..." />
+  1725→                </div>
+  1726→              )}
+  1727→
+  1728→              {step === 'success' && automationResults && (
+  1729→                <SuccessScreen
+  1730→                  results={automationResults}
+  1731→                  contact={contact}
+  1732→                  brandedSelfie={brandedSelfie}
+  1733→                  cardWatermarked={cardWatermarked}
+  1734→                  cardBase64={cardBase64}
+  1735→                  cardUrl={cardUrl}
+  1736→                  onReset={handleReset}
+  1737→                />
+  1738→              )}
+  1739→            </main>
+  1740→          )}
+  1741→
+  1742→          {/* Agent Chat Mode */}
+  1743→          {mode === 'chat' && (
+  1744→            <main className="flex-1 pt-2">
+  1745→              <div className="flex items-center gap-3 px-4 pb-3">
+  1746→                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#C00F7A]/10 flex items-center justify-center">
+  1747→                  <Zap strokeWidth={1.25} className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C00F7A]" />
+  1748→                </div>
+  1749→                <div>
+  1750→                  <h3 className="text-sm font-medium text-[#1D1D1F]">VSUAL Assistant</h3>
+  1751→                  <p className="text-[11px] text-[#86868B]">Powered by AI</p>
+  1752→                </div>
+  1753→              </div>
+  1754→              <AgentChat />
+  1755→            </main>
+  1756→          )}
+  1757→        </div>
+  1758→      )}
+  1759→    </div>
+  1760→  );
+  1761→}
+  1762→
