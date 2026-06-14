@@ -16,11 +16,10 @@ interface SaveContactRequest {
 }
 
 /**
- * POST - Save contact to local SQLite database via Prisma
- *
+ * POST - Save contact to database
  * Flow:
- * 1. Save contact record with all fields including images (base64 stored in DB)
- * 2. Return success status
+ * 1. Save contact record to PostgreSQL via Prisma
+ * 2. Return status
  */
 export async function POST(req: NextRequest) {
   try {
@@ -34,10 +33,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const start = Date.now();
+    let ghlStatus = 'skipped';
+    let driveStatus = 'skipped';
+
+    // Try GHL contact creation if configured
+    try {
+      const { createGHLContact } = await import('@/lib/ghl');
+      const ghlResult = await createGHLContact({ name, company, title, email, phone, address, source: source || 'VSUAL Networking App' });
+      ghlStatus = ghlResult.status;
+    } catch {
+      ghlStatus = 'error';
+    }
 
     // Save contact to database
-    const record = await db.contact.create({
+    const contact = await db.contact.create({
       data: {
         name: name || '',
         company: company || '',
@@ -47,31 +56,35 @@ export async function POST(req: NextRequest) {
         address: address || '',
         source: source || 'VSUAL Networking App',
         selfieBase64: selfie_base64 || null,
-        brandedSelfieBase64: selfie_base64 || null,
         businessCardBase64: card_base64 || null,
-        ghlStatus: 'skipped',
-        driveStatus: 'skipped',
+        ghlStatus,
+        driveStatus,
         whatsappStatus: 'skipped',
       },
     });
 
-    const dbStatus = !!record ? 'success' : 'error';
-    const latencyMs = Date.now() - start;
+    const dbStatus = 'success';
 
-    const message = dbStatus === 'success'
-      ? `Contact saved to database! (${latencyMs}ms)`
-      : 'Failed to save contact.';
+    // Build status summary
+    const anySuccess = ghlStatus === 'success' || dbStatus === 'success';
+    const parts: string[] = [];
+    if (dbStatus === 'success') parts.push('saved to DB');
+    if (ghlStatus === 'success') parts.push('added to GoHighLevel');
+    if (ghlStatus === 'tracked') parts.push('tracked via GHL pixel');
+    const message = anySuccess
+      ? `Contact ${parts.join(' & ')}!`
+      : 'Contact saved locally. Integrations not configured.';
 
     return NextResponse.json({
-      success: dbStatus === 'success',
+      success: anySuccess,
       message,
-      ghl_status: 'skipped',
-      ghl_message: 'GHL integration not available in this deployment',
-      drive_status: 'skipped',
-      drive_message: 'Cloud storage not available in this deployment',
+      ghl_status: ghlStatus,
+      ghl_message: '',
+      drive_status: driveStatus,
+      drive_message: 'Image storage uses database (Prisma PostgreSQL).',
       db_status: dbStatus,
-      db_layer: 'sqlite',
-      db_message: message,
+      db_layer: 'prisma-postgresql',
+      db_message: `Contact saved (ID: ${contact.id})`,
       whatsapp_status: 'skipped',
       whatsapp_message: 'Use the Share to WhatsApp button on the success screen.',
       selfie_drive_url: null,
@@ -95,7 +108,7 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET - List all contacts from the database
+ * GET - List all contacts
  */
 export async function GET() {
   try {
@@ -125,15 +138,15 @@ export async function GET() {
       success: true,
       contacts,
       count: contacts.length,
-      source: 'sqlite',
-      message: `Loaded ${contacts.length} contacts from SQLite`,
+      source: 'prisma-postgresql',
+      message: `Loaded ${contacts.length} contacts`,
     });
   } catch (error) {
     return NextResponse.json({
       success: false,
       contacts: [],
       count: 0,
-      message: 'Database unavailable.',
+      message: `Database unavailable: ${error instanceof Error ? error.message : 'Unknown'}`,
     });
   }
 }

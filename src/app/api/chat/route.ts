@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const SYSTEM_PROMPT = `You are VSUAL Assistant, a helpful AI for VSUALdigitalmedia — a promotional marketing agency.
 You help users with networking strategies, marketing campaigns, brand growth, social media, event planning, and business development.
-Be concise, professional, and actionable in your responses.`;
+Be concise, professional, and actionable in your responses. Use bold formatting for key points.`;
 
 interface Message {
   role: 'system' | 'user' | 'assistant';
@@ -23,17 +23,19 @@ export async function POST(req: NextRequest) {
 
     const sid = session_id || 'default';
     let aiMessage = '';
-    let usedModel = 'z-ai';
     let usedProvider = 'z-ai';
 
-    // Try Z AI (free)
+    // Use Z AI (FREE) for chat
     try {
       const zai = await ZAI.create();
       const completion = await zai.chat.completions.create({
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+        messages: [
+          { role: 'assistant', content: SYSTEM_PROMPT },
+          ...messages,
+        ],
+        thinking: { type: 'disabled' },
       });
       aiMessage = completion.choices[0]?.message?.content || '';
-      usedModel = 'z-ai';
       usedProvider = 'z-ai';
     } catch (zaiErr) {
       console.error('Z AI request failed:', zaiErr);
@@ -52,13 +54,13 @@ export async function POST(req: NextRequest) {
         });
       }
       await db.chatSession.create({
-        data: { sessionId: sid, role: 'assistant', content: aiMessage, model: usedModel, provider: usedProvider },
+        data: { sessionId: sid, role: 'assistant', content: aiMessage, model: 'z-ai', provider: usedProvider },
       });
     } catch (dbErr) {
       console.error('Failed to save chat to DB:', dbErr);
     }
 
-    return Response.json({ message: aiMessage, model: usedModel, provider: usedProvider });
+    return Response.json({ message: aiMessage, model: 'z-ai', provider: usedProvider });
   } catch (error) {
     console.error('Chat API error:', error);
     return Response.json({ error: 'Failed to generate response' }, { status: 500 });

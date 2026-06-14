@@ -47,9 +47,20 @@ function parseOCRResponse(rawContent: string) {
   };
 }
 
-/** Z AI Vision (FREE - primary) */
-async function ocrViaZAI(cleanBase64: string): Promise<{ text: string; provider: string } | null> {
+export async function POST(req: NextRequest) {
   try {
+    const { image_base64 } = await req.json();
+
+    if (!image_base64) {
+      return NextResponse.json({ error: 'No image data provided' }, { status: 400 });
+    }
+
+    let cleanBase64 = image_base64;
+    if (cleanBase64.includes(',')) {
+      cleanBase64 = cleanBase64.split(',')[1];
+    }
+
+    // Use Z AI Vision (FREE) for OCR
     const zai = await ZAI.create();
     const response = await zai.chat.completions.createVision({
       messages: [
@@ -66,39 +77,16 @@ async function ocrViaZAI(cleanBase64: string): Promise<{ text: string; provider:
     });
 
     const text = response.choices[0]?.message?.content || '';
-    if (text) return { text, provider: 'z-ai-vision' };
-  } catch (err) {
-    console.error('[OCR] z-ai failed:', err instanceof Error ? err.message : err);
-  }
 
-  return null;
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const { image_base64 } = await req.json();
-
-    if (!image_base64) {
-      return NextResponse.json({ error: 'No image data provided' }, { status: 400 });
-    }
-
-    let cleanBase64 = image_base64;
-    if (cleanBase64.includes(',')) {
-      cleanBase64 = cleanBase64.split(',')[1];
-    }
-
-    // Try Z AI Vision (free)
-    let result = await ocrViaZAI(cleanBase64);
-
-    if (!result) {
+    if (!text) {
       return NextResponse.json({
-        error: 'OCR failed: Z AI Vision service unavailable.',
+        error: 'OCR failed: Z AI Vision returned empty response.',
         name: '', company: '', title: '', email: '', phone: '', address: '',
       }, { status: 500 });
     }
 
-    const parsed = parseOCRResponse(result.text);
-    return NextResponse.json({ ...parsed, ocr_provider: result.provider });
+    const parsed = parseOCRResponse(text);
+    return NextResponse.json({ ...parsed, ocr_provider: 'z-ai-vision' });
   } catch (error) {
     console.error('OCR API error:', error);
     return NextResponse.json({

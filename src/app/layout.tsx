@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "VSUAL Networking - Instant Authority",
-  description: "Capture. Connect. Automate. VSUALdigitalmedia promotional marketing agency networking tool with AI assistant.",
+  description: "Capture. Connect. Automate. VSUALdigitalmedia promotional marketing agency networking tool with AI assistant powered by Z AI.",
   keywords: ["VSUAL", "networking", "marketing", "business cards", "AI assistant"],
   authors: [{ name: "VSUALdigitalmedia" }],
   openGraph: {
@@ -41,7 +41,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
-        <Toaster />
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );
