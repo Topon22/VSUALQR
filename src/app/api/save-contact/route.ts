@@ -11,6 +11,7 @@ interface SaveContactRequest {
   phone: string;
   address?: string;
   selfie_base64?: string;
+  branded_selfie_base64?: string;
   card_base64?: string;
   source?: string;
 }
@@ -24,7 +25,7 @@ interface SaveContactRequest {
 export async function POST(req: NextRequest) {
   try {
     const body: SaveContactRequest = await req.json();
-    const { name, company, title, email, phone, address, selfie_base64, card_base64, source } = body;
+    const { name, company, title, email, phone, address, selfie_base64, branded_selfie_base64, card_base64, source } = body;
 
     if (!name && !email && !phone) {
       return NextResponse.json(
@@ -56,10 +57,31 @@ export async function POST(req: NextRequest) {
         address: address || '',
         source: source || 'VSUAL Networking App',
         selfieBase64: selfie_base64 || null,
+        brandedSelfieBase64: branded_selfie_base64 || selfie_base64 || null,
         businessCardBase64: card_base64 || null,
+        selfieDriveUrl: null,
+        cardDriveUrl: null,
         ghlStatus,
         driveStatus,
         whatsappStatus: 'skipped',
+      },
+    });
+
+    // Generate image serving URLs
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_BASE_URL || '';
+    const selfie_drive_url = `${baseUrl}/api/images/${contact.id}?type=selfie`;
+    const branded_drive_url = `${baseUrl}/api/images/${contact.id}?type=branded`;
+    const card_drive_url = `${baseUrl}/api/images/${contact.id}?type=card`;
+
+    // Update contact with drive URLs
+    await db.contact.update({
+      where: { id: contact.id },
+      data: {
+        selfieDriveUrl: selfie_drive_url,
+        cardDriveUrl: card_drive_url,
+        driveStatus: 'success',
       },
     });
 
@@ -87,8 +109,9 @@ export async function POST(req: NextRequest) {
       db_message: `Contact saved (ID: ${contact.id})`,
       whatsapp_status: 'skipped',
       whatsapp_message: 'Use the Share to WhatsApp button on the success screen.',
-      selfie_drive_url: null,
-      card_drive_url: null,
+      selfie_drive_url: selfie_drive_url,
+      branded_drive_url: branded_drive_url,
+      card_drive_url: card_drive_url,
       contact: { name, company, title, email, phone, address },
     });
   } catch (error) {

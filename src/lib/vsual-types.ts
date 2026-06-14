@@ -21,6 +21,7 @@ export interface AutomationResults {
   db_status: 'success' | 'skipped' | 'error' | 'unknown';
   whatsapp_status: 'success' | 'skipped' | 'error' | 'unknown';
   selfie_drive_url?: string;
+  branded_drive_url?: string;
   card_drive_url?: string;
 }
 
@@ -35,8 +36,8 @@ export interface ChatMessage {
 /** The current step within the networking workflow. */
 export type AppStep = 'capture' | 'analyzing' | 'form' | 'automating' | 'success';
 
-/** Top-level app mode — networking capture or AI chat. */
-export type AppMode = 'networking' | 'chat';
+/** Top-level app mode — networking capture, image gallery, or AI chat. */
+export type AppMode = 'networking' | 'gallery' | 'chat';
 
 /** Brand color constant — magenta. */
 export const MAGENTA = '#C00F7A';

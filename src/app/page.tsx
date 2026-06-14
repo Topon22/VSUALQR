@@ -51,6 +51,7 @@ import {
 import { fileToBase64, urlToBase64, compressImage, generateContactCardImage, base64ToBlob } from '@/lib/vsual-utils';
 import { contactSchema, ContactFormValues } from '@/lib/vsual-validation';
 import { Footer } from '@/components/vsual/footer';
+import { ImageGallery } from '@/components/vsual/image-gallery';
 
 // ==================== ANIMATION VARIANTS ====================
 const fadeInUp = {
@@ -1290,6 +1291,18 @@ function AgentChat() {
 // ==================== MODE TOGGLE (with animated indicator) ====================
 
 function ModeToggle({ mode, onModeChange }: { mode: AppMode; onModeChange: (mode: AppMode) => void }) {
+  const tabs: { key: AppMode; label: string; icon: React.ReactNode }[] = [
+    { key: 'networking', label: 'Capture', icon: <HomeIcon strokeWidth={1.5} className="w-4 h-4" /> },
+    { key: 'gallery', label: 'Gallery', icon: <ImageIcon strokeWidth={1.5} className="w-4 h-4" /> },
+    { key: 'chat', label: 'Agent', icon: <MessageCircle strokeWidth={1.5} className="w-4 h-4" /> },
+  ];
+
+  const getLeft = (key: AppMode) => {
+    const idx = tabs.findIndex((t) => t.key === key);
+    return `calc(${idx} * (100% / 3) + 4px)`;
+  };
+  const getWidth = () => 'calc(100% / 3 - 5px)';
+
   return (
     <div className="mx-4 mt-4 p-1 flex items-center bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-sm relative">
       {/* Animated background pill */}
@@ -1298,27 +1311,21 @@ function ModeToggle({ mode, onModeChange }: { mode: AppMode; onModeChange: (mode
         layoutId="modeBg"
         transition={{ type: 'spring', stiffness: 350, damping: 30 }}
         style={{
-          left: mode === 'networking' ? 4 : '50%',
-          right: mode === 'chat' ? 4 : '50%',
-          width: 'calc(50% - 4px)',
+          left: getLeft(mode),
+          width: getWidth(),
         }}
       />
-      <button
-        onClick={() => onModeChange('networking')}
-        className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-colors duration-300 ${
-          mode === 'networking' ? 'text-white' : 'text-gray-400 hover:text-gray-700'
-        }`}
-      >
-        <HomeIcon strokeWidth={1.5} className="w-4 h-4" /> Capture
-      </button>
-      <button
-        onClick={() => onModeChange('chat')}
-        className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-colors duration-300 ${
-          mode === 'chat' ? 'text-white' : 'text-gray-400 hover:text-gray-700'
-        }`}
-      >
-        <MessageCircle strokeWidth={1.5} className="w-4 h-4" /> Agent Chat
-      </button>
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => onModeChange(tab.key)}
+          className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold tracking-tight transition-colors duration-300 ${
+            mode === tab.key ? 'text-white' : 'text-gray-400 hover:text-gray-700'
+          }`}
+        >
+          {tab.icon} {tab.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1498,6 +1505,7 @@ export default function Home() {
         body: JSON.stringify({
           name: contact.name, company: contact.company, title: contact.title, email: contact.email, phone: contact.phone, address: contact.address,
           selfie_base64: brandedSelfie || undefined,
+          branded_selfie_base64: brandedSelfie || undefined,
           card_base64: cardWatermarked || cardBase64 || undefined,
           source: 'VSUAL Networking App',
         }),
@@ -1513,7 +1521,7 @@ export default function Home() {
         success: data.success, message: data.message,
         ghl_status: data.ghl_status || 'unknown', drive_status: data.drive_status || 'unknown',
         db_status: data.db_status || 'unknown', whatsapp_status: data.whatsapp_status || 'unknown',
-        selfie_drive_url: data.selfie_drive_url, card_drive_url: data.card_drive_url,
+        selfie_drive_url: data.selfie_drive_url, branded_drive_url: data.branded_drive_url, card_drive_url: data.card_drive_url,
       };
       if (results.db_status === 'success') toast.success('Saved to database!');
       if (results.ghl_status === 'success') toast.success('Added to GoHighLevel!');
@@ -1636,6 +1644,28 @@ export default function Home() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+              </main>
+            )}
+
+            {mode === 'gallery' && (
+              <main className="flex-1 pt-2">
+                <motion.div
+                  className="flex items-center gap-3 px-5 pb-3"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#C00F7A] to-[#E91E90] flex items-center justify-center shadow-[0_2px_12px_rgba(192,15,122,0.3)]">
+                    <ImageIcon strokeWidth={1.5} className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Image Storage</h3>
+                    <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                      <Database strokeWidth={1.25} className="w-3 h-3" /> Stored in Prisma PostgreSQL
+                    </p>
+                  </div>
+                </motion.div>
+                <ImageGallery />
               </main>
             )}
 
