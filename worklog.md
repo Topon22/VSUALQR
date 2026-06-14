@@ -269,3 +269,36 @@ Stage Summary:
 - Fixed Prisma connection pool timeout (P2024) — connection_limit=3, pool_timeout=30
 - All three platforms (GitHub, Vercel, Prisma) fully synced and healthy
 - App fully functional end-to-end with zero errors
+
+---
+
+Task ID: image-preview-whatsapp
+Agent: Main Agent
+Task: Fix image previews and WhatsApp sharing with contact card image
+
+Work Log:
+- Added generateContactCardImage() utility in vsual-utils.ts
+  - Generates branded VSUAL contact card PNG (800x500) with Canvas API
+  - Includes: selfie (circular crop), name, title, company, email, phone, address
+  - Dark gradient background with magenta accent bar
+  - VSUAL branding and Z AI badge at bottom
+- Rewrote SuccessScreen with major improvements:
+  - Contact info card: dark-themed card with selfie, name, title, company, email, phone
+  - Larger image previews: aspect-[3/4] ratio instead of small 80x80px thumbnails
+  - Contact card preview: tap to expand the generated contact card image
+  - Image modal: full-screen with Share Image and Download buttons
+  - WhatsApp sharing: now uses Web Share API with contact card PNG file
+  - Share button: also shares contact card image
+  - Loading state while generating card
+- Pushed to GitHub (commit 40ceae9)
+- Deployed to Vercel: build successful, all routes compiled
+- Deployed to Prisma (VSUALQR): live in 33.0s
+- ESLint: zero errors
+- Dev server: running, no errors
+
+Stage Summary:
+- Image previews now display properly with larger sizes and proper aspect ratios
+- WhatsApp sharing includes branded contact card image with all info
+- Web Share API used for native sharing with image file attachment
+- Fallback to WhatsApp URL API when Web Share not available
+- All three platforms updated
