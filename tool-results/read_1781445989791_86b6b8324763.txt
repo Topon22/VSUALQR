@@ -1,0 +1,590 @@
+   600→            <Camera className="w-5 h-5" />
+   601→            <span className="text-xs font-bold">Add Selfie</span>
+   602→          </button>
+   603→        )}
+   604→
+   605→        {cardBase64 ? (
+   606→          <GlowCard className="p-2">
+   607→            <div className="relative rounded-xl overflow-hidden">
+   608→              <img src={cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardUrl || `data:image/jpeg;base64,${cardBase64}`} alt="Business Card" className="w-full h-32 sm:h-40 object-cover" />
+   609→              <div className="absolute top-2 right-2">
+   610→                <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white text-[9px] font-bold shadow-sm">Watermarked</span>
+   611→              </div>
+   612→            </div>
+   613→            <button onClick={onRescan} className="mt-2 w-full flex items-center justify-center gap-1 py-2 text-[11px] font-bold text-[#C00F7A] hover:text-[#9A0C62] transition-colors active:scale-95" style={{ touchAction: 'manipulation' }}>
+   614→              <RefreshCw className="w-3 h-3" /> Re-scan
+   615→            </button>
+   616→          </GlowCard>
+   617→        ) : (
+   618→          <button onClick={onRescan} className="rounded-2xl border-2 border-dashed border-gray-200 py-6 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-[#C00F7A]/50 hover:text-[#C00F7A] transition-all active:scale-95">
+   619→            <CreditCard className="w-5 h-5" />
+   620→            <span className="text-xs font-bold">Scan Card</span>
+   621→          </button>
+   622→        )}
+   623→      </div>
+   624→
+   625→      {/* Contact Form Fields */}
+   626→      <GlassCard className="p-5 space-y-4">
+   627→        <p className="text-xs font-bold text-[#C00F7A] uppercase tracking-widest mb-1 flex items-center gap-1.5">
+   628→          <Sparkles className="w-3.5 h-3.5" /> Contact Details
+   629→        </p>
+   630→        <GlassInput label="Name" icon={User} placeholder="John Doe" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
+   631→        <GlassInput label="Company" icon={Building2} placeholder="Acme Corp" value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} />
+   632→        <GlassInput label="Title" icon={Briefcase} placeholder="Sales Director" value={contact.title} onChange={(e) => setContact({ ...contact, title: e.target.value })} />
+   633→        <GlassInput label="Email" icon={Mail} type="email" placeholder="john@acme.com" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} />
+   634→        <GlassInput label="Phone" icon={Phone} type="tel" placeholder="+1 555 123 4567" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
+   635→        <GlassInput label="Address (Optional)" icon={MapPin} placeholder="123 Main St, City, State" value={contact.address} onChange={(e) => setContact({ ...contact, address: e.target.value })} />
+   636→      </GlassCard>
+   637→
+   638→      <div className="space-y-3 pb-8">
+   639→        <PrimaryButton onClick={onSubmit} loading={loading} className="w-full text-base">
+   640→          <Rocket strokeWidth={2} className="w-5 h-5" />
+   641→          Confirm & Save
+   642→        </PrimaryButton>
+   643→
+   644→        <div className="flex items-center justify-center gap-4 text-xs text-gray-400 font-medium">
+   645→          <span className="flex items-center gap-1.5"><Building2 strokeWidth={1.5} className="w-3.5 h-3.5" /> GHL</span>
+   646→          <span className="flex items-center gap-1.5"><Database strokeWidth={1.5} className="w-3.5 h-3.5" /> DB</span>
+   647→          <span className="flex items-center gap-1.5"><MessageCircle strokeWidth={1.5} className="w-3.5 h-3.5" /> WhatsApp</span>
+   648→        </div>
+   649→      </div>
+   650→    </div>
+   651→  );
+   652→}
+   653→
+   654→// ==================== WHATSAPP ICON ====================
+   655→
+   656→function WhatsAppIcon({ className = "w-4 h-4" }: { className?: string }) {
+   657→  return (
+   658→    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+   659→      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+   660→    </svg>
+   661→  );
+   662→}
+   663→
+   664→// ==================== SUCCESS SCREEN ====================
+   665→
+   666→function SuccessScreen({
+   667→  results, contact, brandedSelfie, cardWatermarked, cardBase64, cardUrl, onReset,
+   668→}: {
+   669→  results: AutomationResults; contact: Contact; brandedSelfie: string | null; cardWatermarked: string | null; cardBase64: string | null; cardUrl: string | null; onReset: () => void;
+   670→}) {
+   671→  const [imageModal, setImageModal] = useState<{type: 'card' | 'selfie'; open: boolean}>({type: 'card', open: false});
+   672→
+   673→  const cardPreviewSrc = results.card_drive_url || cardUrl || (cardWatermarked ? `data:image/jpeg;base64,${cardWatermarked}` : cardBase64 ? `data:image/jpeg;base64,${cardBase64}` : null);
+   674→  const selfiePreviewSrc = results.selfie_drive_url || (brandedSelfie ? `data:image/jpeg;base64,${brandedSelfie}` : null);
+   675→
+   676→  const copyToClipboard = useCallback((text: string) => {
+   677→    navigator.clipboard.writeText(text).then(() => toast.success('Link copied!')).catch(() => toast.error('Failed to copy'));
+   678→  }, []);
+   679→
+   680→  const buildWhatsAppText = useCallback(() => {
+   681→    const lines = [`*📋 New Contact: ${contact.name || 'N/A'}*`];
+   682→    if (contact.company) lines.push(`🏢 Company: ${contact.company}`);
+   683→    if (contact.title) lines.push(`💼 Title: ${contact.title}`);
+   684→    if (contact.email) lines.push(`📧 Email: ${contact.email}`);
+   685→    if (contact.phone) lines.push(`📱 Phone: ${contact.phone}`);
+   686→    lines.push('');
+   687→    lines.push('Status:');
+   688→    if (results.ghl_status === 'success') lines.push('✅ Added to GoHighLevel CRM');
+   689→    if (results.db_status === 'success') lines.push('✅ Saved to Database');
+   690→    lines.push('');
+   691→    lines.push('_VSUAL Networking App_');
+   692→    return lines.join('\n');
+   693→  }, [contact, results]);
+   694→
+   695→  const shareToWhatsApp = useCallback(() => {
+   696→    const text = buildWhatsAppText();
+   697→    if (navigator.share) {
+   698→      navigator.share({ title: `New Contact: ${contact.name}`, text }).catch(() => {
+   699→        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+   700→      });
+   701→      return;
+   702→    }
+   703→    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+   704→  }, [buildWhatsAppText, contact.name]);
+   705→
+   706→  const openWhatsAppGroup = useCallback(() => { window.open(WHATSAPP_GROUP_LINK, '_blank'); }, []);
+   707→
+   708→  const shareGeneral = useCallback(async () => {
+   709→    const text = `New Contact Captured: ${contact.name}${contact.company ? ' from ' + contact.company : ''}${contact.email ? ' (' + contact.email + ')' : ''}`;
+   710→    if (navigator.share) { try { await navigator.share({ title: 'VSUAL Contact', text }); return; } catch {} }
+   711→    await navigator.clipboard.writeText(text);
+   712→    toast.success('Contact info copied to clipboard!');
+   713→  }, [contact]);
+   714→
+   715→  return (
+   716→    <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5 sm:px-6 gap-5">
+   717→      <Header />
+   718→
+   719→      {/* Success Celebration */}
+   720→      <motion.div className="flex flex-col items-center gap-4" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 15 }}>
+   721→        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_8px_32px_rgba(16,185,129,0.4)]">
+   722→          <PartyPopper strokeWidth={1.5} className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
+   723→        </div>
+   724→        <div className="text-center px-4">
+   725→          <h2 className="text-2xl sm:text-3xl tracking-tight font-black text-gray-900 mb-2">
+   726→            You&apos;re <span className="bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">Connected!</span>
+   727→          </h2>
+   728→          <p className="text-sm sm:text-base leading-relaxed text-gray-500">{results.message}</p>
+   729→        </div>
+   730→      </motion.div>
+   731→
+   732→      {/* Captured Images Summary */}
+   733→      {(selfiePreviewSrc || cardPreviewSrc) && (
+   734→        <motion.div className="flex gap-3 justify-center" {...fadeInUp}>
+   735→          {selfiePreviewSrc && (
+   736→            <button onClick={() => setImageModal({type: 'selfie', open: true})} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
+   737→              <img src={selfiePreviewSrc} alt="Selfie" className="w-full h-full object-cover" />
+   738→              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1">
+   739→                <p className="text-[9px] text-white font-bold">Selfie</p>
+   740→              </div>
+   741→              {results.selfie_drive_url && <div className="absolute top-1 left-1"><Cloud className="w-3 h-3 text-emerald-400" fill="currentColor" /></div>}
+   742→            </button>
+   743→          )}
+   744→          {cardPreviewSrc && (
+   745→            <button onClick={() => setImageModal({type: 'card', open: true})} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-[#C00F7A]/30 shadow-[0_4px_20px_rgba(192,15,122,0.15)] active:scale-95 transition-transform">
+   746→              <img src={cardPreviewSrc} alt="Business Card" className="w-full h-full object-cover" />
+   747→              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1">
+   748→                <p className="text-[9px] text-white font-bold">Card</p>
+   749→              </div>
+   750→              {results.card_drive_url && <div className="absolute top-1 left-1"><Cloud className="w-3 h-3 text-emerald-400" fill="currentColor" /></div>}
+   751→            </button>
+   752→          )}
+   753→        </motion.div>
+   754→      )}
+   755→
+   756→      {/* Image Preview Modal */}
+   757→      {imageModal.open && (
+   758→        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setImageModal({type: 'card', open: false})}>
+   759→          <div className="relative max-w-[90vw] max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+   760→            <button onClick={() => setImageModal({type: 'card', open: false})} className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center z-10 active:scale-90">
+   761→              <X className="w-4 h-4 text-black" />
+   762→            </button>
+   763→            <img src={imageModal.type === 'card' ? cardPreviewSrc : selfiePreviewSrc} alt={imageModal.type === 'card' ? 'Business Card' : 'Selfie'} className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl object-contain" />
+   764→          </div>
+   765→        </div>
+   766→      )}
+   767→
+   768→      {/* Automation Status */}
+   769→      <motion.div {...fadeInUp}>
+   770→        <GlassCard className="p-5 w-full max-w-sm space-y-3">
+   771→          <p className="text-xs font-bold text-[#C00F7A] uppercase tracking-widest mb-2 flex items-center gap-1.5">
+   772→            <Zap className="w-3.5 h-3.5" /> Automation Status
+   773→          </p>
+   774→          {[
+   775→            { icon: <Database strokeWidth={1.5} className="w-4 h-4" />, label: 'Database', status: results.db_status },
+   776→            { icon: <Cloud strokeWidth={1.5} className="w-4 h-4" />, label: 'Cloud Storage', status: results.drive_status },
+   777→            { icon: <Building2 strokeWidth={1.5} className="w-4 h-4" />, label: 'GoHighLevel', status: results.ghl_status },
+   778→            { icon: <WhatsAppIcon />, label: 'WhatsApp Group', status: results.whatsapp_status },
+   779→          ].map((item, i) => (
+   780→            <div key={i} className="flex items-center justify-between py-1">
+   781→              <span className="text-sm text-gray-500 flex items-center gap-2 font-medium">{item.icon} {item.label}</span>
+   782→              <StatusBadge status={item.status} />
+   783→            </div>
+   784→          ))}
+   785→        </GlassCard>
+   786→      </motion.div>
+   787→
+   788→      {/* Cloud Storage Preview Links */}
+   789→      {(results.card_drive_url || results.selfie_drive_url) && (
+   790→        <GlassCard className="p-5 w-full max-w-sm space-y-3">
+   791→          <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+   792→            <Cloud strokeWidth={1.5} className="w-3.5 h-3.5" /> Uploaded to Cloud
+   793→          </p>
+   794→          {results.card_drive_url && (
+   795→            <div className="flex items-center gap-2 bg-white/50 rounded-xl px-3 py-2.5">
+   796→              <ImageIcon strokeWidth={1.5} className="w-4 h-4 text-[#C00F7A] shrink-0" />
+   797→              <p className="text-[11px] text-gray-700 truncate flex-1 font-medium">{results.card_drive_url}</p>
+   798→              <button onClick={() => copyToClipboard(results.card_drive_url!)} className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0 active:scale-90" title="Copy link"><Link strokeWidth={1.5} className="w-3.5 h-3.5" /></button>
+   799→              <a href={results.card_drive_url} target="_blank" rel="noopener noreferrer" className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0 active:scale-90" title="Open"><ExternalLink strokeWidth={1.5} className="w-3.5 h-3.5" /></a>
+   800→            </div>
+   801→          )}
+   802→          {results.selfie_drive_url && (
+   803→            <div className="flex items-center gap-2 bg-white/50 rounded-xl px-3 py-2.5">
+   804→              <ImageIcon strokeWidth={1.5} className="w-4 h-4 text-[#C00F7A] shrink-0" />
+   805→              <p className="text-[11px] text-gray-700 truncate flex-1 font-medium">{results.selfie_drive_url}</p>
+   806→              <button onClick={() => copyToClipboard(results.selfie_drive_url!)} className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0 active:scale-90" title="Copy link"><Link strokeWidth={1.5} className="w-3.5 h-3.5" /></button>
+   807→              <a href={results.selfie_drive_url} target="_blank" rel="noopener noreferrer" className="text-[#C00F7A] hover:text-[#9A0C62] transition-colors shrink-0 active:scale-90" title="Open"><ExternalLink strokeWidth={1.5} className="w-3.5 h-3.5" /></a>
+   808→            </div>
+   809→          )}
+   810→        </GlassCard>
+   811→      )}
+   812→
+   813→      {/* WhatsApp + Share buttons */}
+   814→      <div className="w-full max-w-sm space-y-2">
+   815→        <button onClick={shareToWhatsApp} className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold transition-all active:scale-[0.97] shadow-[0_4px_20px_rgba(37,211,102,0.3)]" style={{ backgroundColor: '#25D366', color: 'white' }}>
+   816→          <WhatsAppIcon className="w-5 h-5" /> Share Contact to WhatsApp
+   817→        </button>
+   818→        <div className="grid grid-cols-2 gap-2">
+   819→          <button onClick={openWhatsAppGroup} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors">
+   820→            <MessageCircle strokeWidth={1.5} className="w-4 h-4" /> Group
+   821→          </button>
+   822→          <button onClick={shareGeneral} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors">
+   823→            <Share2 strokeWidth={1.5} className="w-4 h-4" /> Share
+   824→          </button>
+   825→        </div>
+   826→      </div>
+   827→
+   828→      <PrimaryButton onClick={onReset} className="mt-2">
+   829→        <RefreshCw strokeWidth={2} className="w-4 h-4" /> New Capture
+   830→      </PrimaryButton>
+   831→    </div>
+   832→  );
+   833→}
+   834→
+   835→// ==================== HELPER: base64ToBlob ====================
+   836→function base64ToBlob(base64: string, mimeType: string): Blob {
+   837→  const binaryStr = atob(base64);
+   838→  const bytes = new Uint8Array(binaryStr.length);
+   839→  for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+   840→  return new Blob([bytes], { type: mimeType });
+   841→}
+   842→
+   843→// ==================== AGENT CHAT ====================
+   844→
+   845→function AgentChat() {
+   846→  const [messages, setMessages] = useState<ChatMessage[]>([
+   847→    {
+   848→      id: 'welcome',
+   849→      role: 'assistant',
+   850→      content: "Hi! I'm your VSUAL Assistant. I can help you with networking strategies, marketing campaigns, brand growth, and more. How can I help you today?",
+   851→      timestamp: new Date(),
+   852→    },
+   853→  ]);
+   854→  const [input, setInput] = useState('');
+   855→  const [loading, setLoading] = useState(false);
+   856→  const messagesEndRef = useRef<HTMLDivElement>(null);
+   857→  const sessionIdRef = useRef(`session-${Date.now()}`);
+   858→
+   859→  const scrollToBottom = useCallback(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, []);
+   860→  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+   861→
+   862→  const handleSend = async () => {
+   863→    const trimmed = input.trim();
+   864→    if (!trimmed || loading) return;
+   865→
+   866→    const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: trimmed, timestamp: new Date() };
+   867→    setMessages((prev) => [...prev, userMsg]);
+   868→    setInput('');
+   869→    setLoading(true);
+   870→
+   871→    try {
+   872→      const response = await fetch('/api/chat', {
+   873→        method: 'POST',
+   874→        headers: { 'Content-Type': 'application/json' },
+   875→        body: JSON.stringify({
+   876→          messages: messages.filter((m) => m.id !== 'welcome').concat(userMsg).map((m) => ({ role: m.role, content: m.content })),
+   877→          session_id: sessionIdRef.current,
+   878→        }),
+   879→      });
+   880→
+   881→      const data = await response.json();
+   882→      if (data.error) { toast.error(data.error); return; }
+   883→
+   884→      const assistantMsg: ChatMessage = { id: `assistant-${Date.now()}`, role: 'assistant', content: data.message, timestamp: new Date() };
+   885→      setMessages((prev) => [...prev, assistantMsg]);
+   886→    } catch {
+   887→      toast.error('Failed to get a response. Please try again.');
+   888→    } finally {
+   889→      setLoading(false);
+   890→    }
+   891→  };
+   892→
+   893→  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+   894→    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+   895→  };
+   896→
+   897→  return (
+   898→    <div className="flex flex-col h-[calc(100vh-120px)] sm:h-[calc(100vh-140px)]">
+   899→      {/* Messages Area */}
+   900→      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 vsual-scrollbar">
+   901→        {messages.map((msg) => (
+   902→          <motion.div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+   903→            <div className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-2xl text-[14px] sm:text-[15px] leading-relaxed ${
+   904→              msg.role === 'user'
+   905→                ? 'bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white rounded-br-md shadow-[0_2px_12px_rgba(192,15,122,0.3)]'
+   906→                : 'bg-white/70 backdrop-blur-xl border border-white/40 text-gray-800 rounded-bl-md shadow-sm'
+   907→            }`}>
+   908→              {msg.content}
+   909→            </div>
+   910→          </motion.div>
+   911→        ))}
+   912→
+   913→        {loading && (
+   914→          <div className="flex justify-start">
+   915→            <div className="bg-white/70 backdrop-blur-xl border border-white/40 px-4 py-3 rounded-2xl rounded-bl-md shadow-sm">
+   916→              <div className="flex items-center gap-1.5">
+   917→                <span className="w-2 h-2 rounded-full bg-[#C00F7A] typewriter-dot" />
+   918→                <span className="w-2 h-2 rounded-full bg-[#C00F7A] typewriter-dot" />
+   919→                <span className="w-2 h-2 rounded-full bg-[#C00F7A] typewriter-dot" />
+   920→              </div>
+   921→            </div>
+   922→          </div>
+   923→        )}
+   924→        <div ref={messagesEndRef} />
+   925→      </div>
+   926→
+   927→      {/* Input Area */}
+   928→      <div className="px-4 pb-6 pt-3">
+   929→        <div className="bg-white/70 backdrop-blur-2xl border border-white/40 shadow-[0_4px_24px_rgba(0,0,0,0.04)] flex items-center gap-3 px-4 py-3 rounded-2xl">
+   930→          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask VSUAL Assistant..." className="flex-1 bg-transparent text-gray-900 text-sm sm:text-base placeholder:text-gray-400 focus:outline-none font-medium" disabled={loading} />
+   931→          <button onClick={handleSend} disabled={loading || !input.trim()} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white flex items-center justify-center hover:from-[#9A0C62] hover:to-[#C00F7A] transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-90 shrink-0 shadow-[0_2px_12px_rgba(192,15,122,0.3)]">
+   932→            <Send strokeWidth={1.5} className="w-4 h-4" />
+   933→          </button>
+   934→        </div>
+   935→      </div>
+   936→    </div>
+   937→  );
+   938→}
+   939→
+   940→// ==================== MODE TOGGLE ====================
+   941→
+   942→function ModeToggle({ mode, onModeChange }: { mode: AppMode; onModeChange: (mode: AppMode) => void }) {
+   943→  return (
+   944→    <div className="mx-4 mt-4 p-1 flex items-center gap-1 bg-white/50 backdrop-blur-xl border border-white/40 rounded-2xl shadow-sm">
+   945→      <button
+   946→        onClick={() => onModeChange('networking')}
+   947→        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-all ${
+   948→          mode === 'networking'
+   949→            ? 'bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white shadow-[0_2px_12px_rgba(192,15,122,0.35)]'
+   950→            : 'text-gray-400 hover:text-gray-700'
+   951→        }`}
+   952→      >
+   953→        <HomeIcon strokeWidth={1.5} className="w-4 h-4" /> Capture
+   954→      </button>
+   955→      <button
+   956→        onClick={() => onModeChange('chat')}
+   957→        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold tracking-tight transition-all ${
+   958→          mode === 'chat'
+   959→            ? 'bg-gradient-to-r from-[#C00F7A] to-[#E91E90] text-white shadow-[0_2px_12px_rgba(192,15,122,0.35)]'
+   960→            : 'text-gray-400 hover:text-gray-700'
+   961→        }`}
+   962→      >
+   963→        <MessageCircle strokeWidth={1.5} className="w-4 h-4" /> Agent Chat
+   964→      </button>
+   965→    </div>
+   966→  );
+   967→}
+   968→
+   969→// ==================== MAIN PAGE ====================
+   970→
+   971→export default function Home() {
+   972→  const [showSplash, setShowSplash] = useState(true);
+   973→  const [mode, setMode] = useState<AppMode>('networking');
+   974→  const [step, setStep] = useState<AppStep>('capture');
+   975→  const [contact, setContact] = useState<Contact>({ name: '', company: '', title: '', email: '', phone: '', address: '' });
+   976→  const [brandedSelfie, setBrandedSelfie] = useState<string | null>(null);
+   977→  const [cardBase64, setCardBase64] = useState<string | null>(null);
+   978→  const [cardWatermarked, setCardWatermarked] = useState<string | null>(null);
+   979→  const [cardUrl, setCardUrl] = useState<string | null>(null);
+   980→  const [automationResults, setAutomationResults] = useState<AutomationResults | null>(null);
+   981→  const [analyzeText, setAnalyzeText] = useState('Analyzing...');
+   982→  const [isSubmitting, setIsSubmitting] = useState(false);
+   983→
+   984→  const handleSplashComplete = useCallback(() => setShowSplash(false), []);
+   985→
+   986→  const handleSelfieCapture = useCallback(async (file: File) => {
+   987→    try {
+   988→      setStep('analyzing');
+   989→      setAnalyzeText('Branding your selfie...');
+   990→      const rawBase64 = await fileToBase64(file);
+   991→      const compressed = await compressImage(rawBase64, 600, 0.85);
+   992→      try {
+   993→        const wmResponse = await fetch('/api/watermark-selfie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: compressed }) });
+   994→        const wmData = await wmResponse.json();
+   995→        if (wmData.success && wmData.watermarked_base64) { setBrandedSelfie(wmData.watermarked_base64); } else { setBrandedSelfie(compressed); }
+   996→      } catch { setBrandedSelfie(compressed); }
+   997→      toast.success('Selfie captured with VSUAL watermark!');
+   998→      setStep('capture');
+   999→    } catch { toast.error('Failed to process selfie. Please try again.'); setStep('capture'); }
+  1000→  }, []);
+  1001→
+  1002→  const handleCardCapture = useCallback(async (file: File) => {
+  1003→    try {
+  1004→      setStep('analyzing');
+  1005→      setAnalyzeText('Scanning business card...');
+  1006→      const rawBase64 = await fileToBase64(file);
+  1007→      const compressed = await compressImage(rawBase64, 800, 0.85);
+  1008→      setCardBase64(compressed);
+  1009→      try {
+  1010→        const ocrResponse = await fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: compressed }) });
+  1011→        if (ocrResponse.ok) {
+  1012→          const data = await ocrResponse.json();
+  1013→          const ocrProvider = data.ocr_provider || 'AI OCR';
+  1014→          const extractedFields: Record<string, string> = {};
+  1015→          if (data.name) extractedFields.name = data.name;
+  1016→          if (data.company) extractedFields.company = data.company;
+  1017→          if (data.title) extractedFields.title = data.title;
+  1018→          if (data.email) extractedFields.email = data.email;
+  1019→          if (data.phone) extractedFields.phone = data.phone;
+  1020→          if (data.address) extractedFields.address = data.address;
+  1021→          if (Object.keys(extractedFields).length > 0) {
+  1022→            setContact({ name: data.name || '', company: data.company || '', title: data.title || '', email: data.email || '', phone: data.phone || '', address: data.address || '' });
+  1023→            const fieldCount = Object.keys(extractedFields).length;
+  1024→            toast.success(`${ocrProvider}: ${fieldCount} field${fieldCount > 1 ? 's' : ''} extracted`);
+  1025→          } else { toast.info('Card scanned. Fill in details manually.'); }
+  1026→        } else { toast.info('Card captured. Fill in details manually.'); }
+  1027→      } catch (ocrErr) { console.error('OCR failed:', ocrErr); toast.info('Card captured. Fill in details manually.'); }
+  1028→      try {
+  1029→        setAnalyzeText('Applying watermark...');
+  1030→        const wmResponse = await fetch('/api/watermark-selfie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: compressed }) });
+  1031→        const wmData = await wmResponse.json();
+  1032→        if (wmData.success && wmData.watermarked_base64) { setCardWatermarked(wmData.watermarked_base64); }
+  1033→      } catch { /* Watermark failed - not critical */ }
+  1034→      toast.success('Business card scanned!');
+  1035→      setStep('capture');
+  1036→    } catch { toast.error('Failed to process card image. Please try again.'); setStep('capture'); }
+  1037→  }, []);
+  1038→
+  1039→  const handleRemoveSelfie = useCallback(() => { setBrandedSelfie(null); toast.info('Selfie removed. Take a new one.'); }, []);
+  1040→  const handleRemoveCard = useCallback(() => { setCardBase64(null); setCardWatermarked(null); setCardUrl(null); setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' }); toast.info('Card removed. Scan a new one.'); }, []);
+  1041→
+  1042→  const handleCardUrlSubmit = useCallback(async (url: string) => {
+  1043→    try {
+  1044→      setStep('analyzing');
+  1045→      setAnalyzeText('Loading card from URL...');
+  1046→      setCardUrl(url);
+  1047→      const rawBase64 = await urlToBase64(url);
+  1048→      const compressed = await compressImage(rawBase64, 800, 0.85);
+  1049→      setCardBase64(compressed);
+  1050→      try {
+  1051→        setAnalyzeText('Scanning business card...');
+  1052→        const ocrResponse = await fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: compressed }) });
+  1053→        if (ocrResponse.ok) {
+  1054→          const data = await ocrResponse.json();
+  1055→          const ocrProvider = data.ocr_provider || 'AI OCR';
+  1056→          const extractedFields: Record<string, string> = {};
+  1057→          if (data.name) extractedFields.name = data.name;
+  1058→          if (data.company) extractedFields.company = data.company;
+  1059→          if (data.title) extractedFields.title = data.title;
+  1060→          if (data.email) extractedFields.email = data.email;
+  1061→          if (data.phone) extractedFields.phone = data.phone;
+  1062→          if (data.address) extractedFields.address = data.address;
+  1063→          if (Object.keys(extractedFields).length > 0) {
+  1064→            setContact({ name: data.name || '', company: data.company || '', title: data.title || '', email: data.email || '', phone: data.phone || '', address: data.address || '' });
+  1065→            const fieldCount = Object.keys(extractedFields).length;
+  1066→            toast.success(`${ocrProvider}: ${fieldCount} field${fieldCount > 1 ? 's' : ''} extracted`);
+  1067→          } else { toast.info('Card loaded. Fill in details manually.'); }
+  1068→        } else { toast.info('Card loaded. Fill in details manually.'); }
+  1069→      } catch { toast.info('Card loaded. Fill in details manually.'); }
+  1070→      try {
+  1071→        setAnalyzeText('Applying watermark...');
+  1072→        const wmResponse = await fetch('/api/watermark-selfie', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: compressed }) });
+  1073→        const wmData = await wmResponse.json();
+  1074→        if (wmData.success && wmData.watermarked_base64) { setCardWatermarked(wmData.watermarked_base64); }
+  1075→      } catch { /* Watermark failed */ }
+  1076→      toast.success('Business card loaded from URL!');
+  1077→      setStep('capture');
+  1078→    } catch { toast.error('Failed to load image from URL. Check the link and try again.'); setCardUrl(null); setStep('capture'); }
+  1079→  }, []);
+  1080→
+  1081→  const handleContinueToForm = useCallback(() => setStep('form'), []);
+  1082→
+  1083→  const handleTriggerAutomation = useCallback(async () => {
+  1084→    setStep('automating');
+  1085→    setIsSubmitting(true);
+  1086→    try {
+  1087→      const saveResponse = await fetch('/api/save-contact', {
+  1088→        method: 'POST',
+  1089→        headers: { 'Content-Type': 'application/json' },
+  1090→        body: JSON.stringify({ name: contact.name, company: contact.company, title: contact.title, email: contact.email, phone: contact.phone, address: contact.address, selfie_base64: brandedSelfie || undefined, card_base64: cardWatermarked || cardBase64 || undefined, source: 'VSUAL Networking App' }),
+  1091→      });
+  1092→      const data = await saveResponse.json();
+  1093→      if (data.error) { toast.error(data.error); setStep('form'); setIsSubmitting(false); return; }
+  1094→      const results: AutomationResults = { success: data.success, message: data.message, ghl_status: data.ghl_status || 'unknown', drive_status: data.drive_status || 'unknown', db_status: data.db_status || 'unknown', whatsapp_status: data.whatsapp_status || 'unknown', selfie_drive_url: data.selfie_drive_url, card_drive_url: data.card_drive_url };
+  1095→      if (results.db_status === 'success') toast.success('Saved to database!');
+  1096→      if (results.ghl_status === 'success') toast.success('Added to GoHighLevel!');
+  1097→      if (results.ghl_status === 'tracked') toast.info('GHL: Contact tracked via pixel.');
+  1098→      if (results.db_status === 'error') toast.error('Database save failed.');
+  1099→      if (results.ghl_status === 'error') toast.error('GHL: ' + (data.ghl_message || 'API error.'));
+  1100→      setAutomationResults(results);
+  1101→      setStep('success');
+  1102→    } catch { toast.error('Save failed. Please try again.'); setStep('form'); } finally { setIsSubmitting(false); }
+  1103→  }, [contact, brandedSelfie, cardWatermarked, cardBase64]);
+  1104→
+  1105→  const handleReset = useCallback(() => { setStep('capture'); setContact({ name: '', company: '', title: '', email: '', phone: '', address: '' }); setBrandedSelfie(null); setCardBase64(null); setCardWatermarked(null); setCardUrl(null); setAutomationResults(null); }, []);
+  1106→  const handleRescan = useCallback(() => { setCardBase64(null); setCardWatermarked(null); setCardUrl(null); setStep('capture'); }, []);
+  1107→  const handleRetakeSelfie = useCallback(() => { setBrandedSelfie(null); setStep('capture'); }, []);
+  1108→  const handleModeChange = useCallback((newMode: AppMode) => setMode(newMode), []);
+  1109→
+  1110→  return (
+  1111→    <div className="w-full max-w-[428px] lg:max-w-[480px] mx-auto min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #FBFBFD 0%, #F5F0F5 40%, #FBFBFD 100%)' }}>
+  1112→      {/* Decorative gradient orbs */}
+  1113→      <div className="fixed top-0 right-0 w-64 h-64 bg-[#C00F7A]/5 rounded-full blur-[100px] pointer-events-none" />
+  1114→      <div className="fixed bottom-20 left-0 w-48 h-48 bg-[#E91E90]/5 rounded-full blur-[80px] pointer-events-none" />
+  1115→
+  1116→      {/* Splash Screen */}
+  1117→      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
+  1118→
+  1119→      {/* Main Content */}
+  1120→      {!showSplash && (
+  1121→        <AnimatePresence mode="wait">
+  1122→          <div className="flex flex-col min-h-screen">
+  1123→            <ModeToggle mode={mode} onModeChange={handleModeChange} />
+  1124→
+  1125→            {mode === 'networking' && (
+  1126→              <main className="flex-1">
+  1127→                {step === 'capture' && (
+  1128→                  <CaptureScreen brandedSelfie={brandedSelfie} cardBase64={cardBase64} cardWatermarked={cardWatermarked} cardUrl={cardUrl} contact={contact} onCardCapture={handleCardCapture} onSelfieCapture={handleSelfieCapture} onRemoveSelfie={handleRemoveSelfie} onRemoveCard={handleRemoveCard} onCardUrlSubmit={handleCardUrlSubmit} onContinue={handleContinueToForm} />
+  1129→                )}
+  1130→                {step === 'analyzing' && (
+  1131→                  <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5">
+  1132→                    <Header />
+  1133→                    {cardBase64 && !cardWatermarked && (
+  1134→                      <div className="mb-4 w-full max-w-[200px]">
+  1135→                        <GlassCard className="p-2 rounded-xl overflow-hidden">
+  1136→                          <img src={cardUrl || `data:image/jpeg;base64,${cardBase64}`} alt="Scanning card" className="w-full h-auto rounded-lg opacity-80" />
+  1137→                        </GlassCard>
+  1138→                        <p className="text-[11px] text-gray-400 text-center mt-2 font-medium">{cardUrl ? 'Loading card...' : 'Scanning this card...'}</p>
+  1139→                      </div>
+  1140→                    )}
+  1141→                    {!cardBase64 && (
+  1142→                      <div className="mb-4 w-full max-w-[200px]">
+  1143→                        <GlassCard className="p-2 rounded-xl overflow-hidden flex items-center justify-center h-28">
+  1144→                          <Camera className="w-8 h-8 text-[#C00F7A] animate-pulse" />
+  1145→                        </GlassCard>
+  1146→                        <p className="text-[11px] text-gray-400 text-center mt-2 font-medium">Processing selfie...</p>
+  1147→                      </div>
+  1148→                    )}
+  1149→                    <AppleSpinner text={analyzeText} />
+  1150→                  </div>
+  1151→                )}
+  1152→                {step === 'form' && (
+  1153→                  <ContactFormScreen contact={contact} setContact={setContact} brandedSelfie={brandedSelfie} cardWatermarked={cardWatermarked} cardBase64={cardBase64} cardUrl={cardUrl} onSubmit={handleTriggerAutomation} onBack={handleReset} onRescan={handleRescan} onRetakeSelfie={handleRetakeSelfie} loading={isSubmitting} />
+  1154→                )}
+  1155→                {step === 'automating' && (
+  1156→                  <div className="flex flex-col items-center justify-center min-h-[60vh] sm:min-h-[70vh] px-5">
+  1157→                    <Header />
+  1158→                    <AppleSpinner text="Triggering automations..." />
+  1159→                  </div>
+  1160→                )}
+  1161→                {step === 'success' && automationResults && (
+  1162→                  <SuccessScreen results={automationResults} contact={contact} brandedSelfie={brandedSelfie} cardWatermarked={cardWatermarked} cardBase64={cardBase64} cardUrl={cardUrl} onReset={handleReset} />
+  1163→                )}
+  1164→              </main>
+  1165→            )}
+  1166→
+  1167→            {mode === 'chat' && (
+  1168→              <main className="flex-1 pt-2">
+  1169→                <div className="flex items-center gap-3 px-5 pb-3">
+  1170→                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#C00F7A] to-[#E91E90] flex items-center justify-center shadow-[0_2px_12px_rgba(192,15,122,0.3)]">
+  1171→                    <Zap strokeWidth={1.5} className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+  1172→                  </div>
+  1173→                  <div>
+  1174→                    <h3 className="text-sm font-bold text-gray-900">VSUAL Assistant</h3>
+  1175→                    <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+  1176→                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Powered by Z AI
+  1177→                    </p>
+  1178→                  </div>
+  1179→                </div>
+  1180→                <AgentChat />
+  1181→              </main>
+  1182→            )}
+  1183→          </div>
+  1184→        </AnimatePresence>
+  1185→      )}
+  1186→    </div>
+  1187→  );
+  1188→}
+  1189→
