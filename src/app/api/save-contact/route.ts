@@ -25,7 +25,14 @@ interface SaveContactRequest {
 export async function POST(req: NextRequest) {
   try {
     const body: SaveContactRequest = await req.json();
-    const { name, company, title, email, phone, address, selfie_base64, branded_selfie_base64, card_base64, source } = body;
+    const { selfie_base64, branded_selfie_base64, card_base64, source } = body;
+    // Trim whitespace from all text fields to prevent data quality issues
+    const name = (body.name || '').trim();
+    const company = (body.company || '').trim();
+    const title = (body.title || '').trim();
+    const email = (body.email || '').trim();
+    const phone = (body.phone || '').trim();
+    const address = (body.address || '').trim();
 
     if (!name && !email && !phone) {
       return NextResponse.json(
@@ -40,7 +47,7 @@ export async function POST(req: NextRequest) {
     // Try GHL contact creation if configured
     try {
       const { createGHLContact } = await import('@/lib/ghl');
-      const ghlResult = await createGHLContact({ name, company, title, email, phone, address, source: source || 'VSUAL Networking App' });
+      const ghlResult = await createGHLContact({ name, company, title, email, phone, address, source: (source || 'VSUAL Networking App').trim() });
       ghlStatus = ghlResult.status;
     } catch {
       ghlStatus = 'error';
@@ -49,13 +56,13 @@ export async function POST(req: NextRequest) {
     // Save contact to database
     const contact = await db.contact.create({
       data: {
-        name: name || '',
-        company: company || '',
-        title: title || '',
-        email: email || '',
-        phone: phone || '',
-        address: address || '',
-        source: source || 'VSUAL Networking App',
+        name,
+        company,
+        title,
+        email,
+        phone,
+        address,
+        source: (source || 'VSUAL Networking App').trim(),
         selfieBase64: selfie_base64 || null,
         brandedSelfieBase64: branded_selfie_base64 || selfie_base64 || null,
         businessCardBase64: card_base64 || null,
