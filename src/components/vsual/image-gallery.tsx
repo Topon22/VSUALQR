@@ -16,7 +16,6 @@ import {
   ChevronUp,
   ExternalLink,
   Copy,
-  Trash2,
   RefreshCw,
   Database,
   FolderOpen,

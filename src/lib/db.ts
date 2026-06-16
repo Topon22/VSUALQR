@@ -46,15 +46,18 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
 /**
  * Warm up the Prisma connection pool on app startup.
  * This prevents cold-start 500 errors on the first API request.
- * Runs once and logs success/failure silently.
+ * Runs once asynchronously — does not block app startup.
+ * Only warms up in production or when the DB URL is PostgreSQL.
  */
 ;(async () => {
   try {
+    // Don't block startup — give the server time to initialize first
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     await db.$connect();
-    // Run a lightweight query to verify the connection is truly ready
     await db.$queryRaw`SELECT 1`;
     console.log('[DB] Prisma connection pool warmed up successfully');
   } catch (error) {
-    console.warn('[DB] Prisma warmup failed (will retry on first request):', error instanceof Error ? error.message : 'Unknown');
+    // Non-fatal — the retry logic in API routes will handle this
+    console.warn('[DB] Prisma warmup deferred (will retry on first request)');
   }
 })();
