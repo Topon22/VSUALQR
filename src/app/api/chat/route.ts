@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
     let aiMessage = '';
     let usedProvider = 'z-ai';
 
-    // Use Z AI (FREE) for chat
+    // Use Z AI (FREE) for chat — try with model specification
     try {
       const zai = await ZAI.create();
       const completion = await zai.chat.completions.create({
+        model: 'qwen/qwen3-235b-a22b',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...messages,
@@ -38,7 +39,22 @@ export async function POST(req: NextRequest) {
       aiMessage = completion.choices[0]?.message?.content || '';
       usedProvider = 'z-ai';
     } catch (zaiErr) {
-      console.error('Z AI request failed:', zaiErr);
+      console.error('Z AI primary model failed:', zaiErr instanceof Error ? zaiErr.message : 'Unknown');
+
+      // Fallback: try without explicit model (uses default)
+      try {
+        const zai = await ZAI.create();
+        const completion = await zai.chat.completions.create({
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...messages,
+          ],
+        });
+        aiMessage = completion.choices[0]?.message?.content || '';
+        usedProvider = 'z-ai-fallback';
+      } catch (fallbackErr) {
+        console.error('Z AI fallback also failed:', fallbackErr instanceof Error ? fallbackErr.message : 'Unknown');
+      }
     }
 
     if (!aiMessage) {
