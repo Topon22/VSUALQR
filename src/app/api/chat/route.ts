@@ -18,26 +18,39 @@ interface Message {
 /**
  * Ensure the .z-ai-config file exists.
  * On Vercel, the file may not be bundled, so we create it from environment variables.
+ * We try multiple locations since the serverless function may have a read-only cwd.
  */
+let configEnsured = false;
 function ensureZAIConfig() {
+  if (configEnsured) return;
+
   const configPaths = [
     path.join(process.cwd(), '.z-ai-config'),
+    '/tmp/.z-ai-config',
   ];
 
   // Check if any config already exists
   for (const p of configPaths) {
-    if (fs.existsSync(p)) return;
+    if (fs.existsSync(p)) {
+      configEnsured = true;
+      return;
+    }
   }
 
   // Create from environment variable
   const envConfig = process.env.Z_AI_CONFIG;
   if (envConfig) {
-    try {
-      const targetPath = configPaths[0];
-      fs.writeFileSync(targetPath, envConfig);
-      console.log('[Z-AI] Created config from Z_AI_CONFIG env var');
-    } catch (err) {
-      console.error('[Z-AI] Failed to write config:', err);
+    for (const targetPath of configPaths) {
+      try {
+        // Parse and re-serialize to ensure valid JSON
+        const parsed = JSON.parse(envConfig);
+        fs.writeFileSync(targetPath, JSON.stringify(parsed, null, 2));
+        console.log(`[Z-AI] Created config at ${targetPath}`);
+        configEnsured = true;
+        return;
+      } catch (err) {
+        console.error(`[Z-AI] Failed to write config to ${targetPath}:`, err);
+      }
     }
   }
 }
