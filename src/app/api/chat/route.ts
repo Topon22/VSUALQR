@@ -37,7 +37,12 @@ export async function POST(req: NextRequest) {
       aiMessage = completion.choices[0]?.message?.content || '';
       usedProvider = 'z-ai';
     } catch (zaiErr) {
-      console.error('Z AI chat failed:', zaiErr instanceof Error ? zaiErr.message : 'Unknown');
+      const errMsg = zaiErr instanceof Error ? zaiErr.message : String(zaiErr);
+      console.error('Z AI chat failed:', errMsg);
+      // Include error info in response for debugging (remove in production later)
+      if (!aiMessage) {
+        aiMessage = `I'm having trouble connecting right now. Please try again in a moment. (Error: ${errMsg.substring(0, 80)})`;
+      }
     }
 
     if (!aiMessage) {
