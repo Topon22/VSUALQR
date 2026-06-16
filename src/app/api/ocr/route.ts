@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const response = await zai.chat.completions.createVision({
       model: 'qwen/qwen2.5-vl-72b-instruct',
       messages: [
-        { role: 'system', content: OCR_SYSTEM_PROMPT },
+        { role: 'assistant', content: OCR_SYSTEM_PROMPT },
         {
           role: 'user',
           content: [

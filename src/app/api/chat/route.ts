@@ -31,10 +31,9 @@ export async function POST(req: NextRequest) {
       const completion = await zai.chat.completions.create({
         model: 'qwen/qwen3-235b-a22b',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'assistant', content: SYSTEM_PROMPT },
           ...messages,
         ],
-        thinking: { type: 'disabled' },
       });
       aiMessage = completion.choices[0]?.message?.content || '';
       usedProvider = 'z-ai';
@@ -46,7 +45,7 @@ export async function POST(req: NextRequest) {
         const zai = await ZAI.create();
         const completion = await zai.chat.completions.create({
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'assistant', content: SYSTEM_PROMPT },
             ...messages,
           ],
         });
