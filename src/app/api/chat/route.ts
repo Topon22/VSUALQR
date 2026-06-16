@@ -1,6 +1,8 @@
 import ZAI from 'z-ai-web-dev-sdk';
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +15,38 @@ interface Message {
   content: string;
 }
 
+/**
+ * Ensure the .z-ai-config file exists.
+ * On Vercel, the file may not be bundled, so we create it from environment variables.
+ */
+function ensureZAIConfig() {
+  const configPaths = [
+    path.join(process.cwd(), '.z-ai-config'),
+  ];
+
+  // Check if any config already exists
+  for (const p of configPaths) {
+    if (fs.existsSync(p)) return;
+  }
+
+  // Create from environment variable
+  const envConfig = process.env.Z_AI_CONFIG;
+  if (envConfig) {
+    try {
+      const targetPath = configPaths[0];
+      fs.writeFileSync(targetPath, envConfig);
+      console.log('[Z-AI] Created config from Z_AI_CONFIG env var');
+    } catch (err) {
+      console.error('[Z-AI] Failed to write config:', err);
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
+    // Ensure Z AI config exists (needed for Vercel serverless)
+    ensureZAIConfig();
+
     const { messages, session_id } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
@@ -39,9 +71,8 @@ export async function POST(req: NextRequest) {
     } catch (zaiErr) {
       const errMsg = zaiErr instanceof Error ? zaiErr.message : String(zaiErr);
       console.error('Z AI chat failed:', errMsg);
-      // Include error info in response for debugging (remove in production later)
       if (!aiMessage) {
-        aiMessage = `I'm having trouble connecting right now. Please try again in a moment. (Error: ${errMsg.substring(0, 80)})`;
+        aiMessage = 'I\'m having trouble connecting right now. Please try again in a moment.';
       }
     }
 

@@ -1,7 +1,19 @@
 import ZAI from 'z-ai-web-dev-sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
+
+/** Ensure Z AI config exists for Vercel serverless deployment */
+function ensureZAIConfig() {
+  const target = path.join(process.cwd(), '.z-ai-config');
+  if (fs.existsSync(target)) return;
+  const envConfig = process.env.Z_AI_CONFIG;
+  if (envConfig) {
+    try { fs.writeFileSync(target, envConfig); } catch {}
+  }
+}
 
 const OCR_SYSTEM_PROMPT = `You are a high-accuracy OCR assistant specialized in extracting contact information from business cards.
 Extract the following fields from the business card image:
@@ -49,6 +61,7 @@ function parseOCRResponse(rawContent: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    ensureZAIConfig();
     const { image_base64 } = await req.json();
 
     if (!image_base64) {
